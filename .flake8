@@ -1,0 +1,10 @@
+[flake8]
+# e501= line too long
+# w503= line break before binary operator
+# e203= whitespace before ':' - inserted by black
+ignore = E501,W503, E203
+per-file-ignores =
+    # f401= imported but unused
+    # flake8 is a steaming pile of shit
+    dbmng.py: F401
+    rf21.py: F401
