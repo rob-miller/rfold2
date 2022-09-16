@@ -1,0 +1,1476 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+CAUTION: Do not modify this file unless you know what you are doing.
+ Unexpected results may occur if the code is changed deliberately.
+-->
+<dbmodel pgmodeler-ver="1.0.0-alpha" use-changelog="false" last-position="0,0" last-zoom="0.7" max-obj-count="45"
+	 default-owner="postgres"
+	 layers="Default layer"
+	 active-layers="0"
+	 layer-name-colors="#000000"
+	 layer-rect-colors="#b4b4b4"
+	 show-layer-names="false" show-layer-rects="false">
+<role name="rfold"
+ login="true"
+ encrypted="true"
+ password="********">
+</role>
+
+<database name="rfold" encoding="UTF8" lc-collate="C.UTF-8" lc-ctype="C.UTF-8" is-template="false" allow-conns="true">
+	<role name="rfold"/>
+	<tablespace name="pg_default"/>
+</database>
+
+<schema name="public" layers="0" rect-visible="true" fill-color="#e1e1e1" sql-disabled="true">
+</schema>
+
+<sequence name="pdb_seq" cycle="false" start="1" increment="1" min-value="0" max-value="2147483647" cache="1">
+	<schema name="public"/>
+	<role name="rfold"/>
+</sequence>
+
+<sequence name="chain_seq" cycle="false" start="1" increment="1" min-value="0" max-value="2147483647" cache="1">
+	<schema name="public"/>
+	<role name="rfold"/>
+</sequence>
+
+<table name="pdb" layers="0" collapse-mode="2" max-obj-count="3" z-value="0">
+	<schema name="public"/>
+	<role name="rfold"/>
+	<position x="1340" y="1260"/>
+	<column name="pdb_key" not-null="true" sequence="public.pdb_seq">
+		<type name="integer" length="0"/>
+	</column>
+	<column name="pdb_id" not-null="true">
+		<type name="varchar" length="4"/>
+	</column>
+	<column name="filename">
+		<type name="varchar" length="0"/>
+	</column>
+	<constraint name="pk_pdb_key" type="pk-constr" table="public.pdb">
+		<columns names="pdb_key" ref-type="src-columns"/>
+	</constraint>
+	<constraint name="uniq_pdbid" type="uq-constr" table="public.pdb">
+		<columns names="pdb_id" ref-type="src-columns"/>
+	</constraint>
+</table>
+
+<sequence name="residue_seq" cycle="false" start="1" increment="1" min-value="0" max-value="2147483647" cache="1">
+	<schema name="public"/>
+	<role name="rfold"/>
+</sequence>
+
+<table name="chain" layers="0" collapse-mode="2" max-obj-count="12" z-value="0">
+	<schema name="public"/>
+	<role name="rfold"/>
+	<position x="1320" y="980"/>
+	<column name="chain_key" not-null="true" sequence="public.chain_seq">
+		<type name="integer" length="0"/>
+	</column>
+	<column name="pdb_key" not-null="true">
+		<type name="integer" length="0"/>
+	</column>
+	<column name="chain_name" not-null="true">
+		<type name="varchar" length="0"/>
+	</column>
+	<column name="chain_id" not-null="true">
+		<type name="varchar" length="0"/>
+	</column>
+	<column name="residues">
+		<type name="integer" length="0"/>
+	</column>
+	<column name="atoms">
+		<type name="integer" length="0"/>
+	</column>
+	<column name="chain_breaks">
+		<type name="integer" length="0"/>
+	</column>
+	<column name="disordered_atoms">
+		<type name="integer" length="0"/>
+	</column>
+	<column name="rebuild">
+		<type name="bool" length="0"/>
+	</column>
+	<column name="source_list">
+		<type name="varchar" length="0"/>
+	</column>
+	<constraint name="pk_chain_key" type="pk-constr" table="public.chain">
+		<columns names="chain_key" ref-type="src-columns"/>
+	</constraint>
+	<constraint name="uniq_chain_name" type="uq-constr" table="public.chain">
+		<columns names="chain_name" ref-type="src-columns"/>
+	</constraint>
+</table>
+
+<sequence name="atom_seq" cycle="false" start="1" increment="1" min-value="0" max-value="2147483647" cache="1">
+	<schema name="public"/>
+	<role name="rfold"/>
+</sequence>
+
+<sequence name="acr_seq" cycle="false" start="1" increment="1" min-value="0" max-value="2147483647" cache="1">
+	<schema name="public"/>
+	<role name="rfold"/>
+</sequence>
+
+<table name="atom" layers="0" collapse-mode="2" max-obj-count="4" z-value="0">
+	<schema name="public"/>
+	<role name="rfold"/>
+	<position x="600" y="1120"/>
+	<column name="atom_key" not-null="true" sequence="public.atom_seq">
+		<type name="integer" length="0"/>
+	</column>
+	<column name="res_key" not-null="true">
+		<type name="integer" length="0"/>
+	</column>
+	<column name="atom_name" not-null="true">
+		<type name="varchar" length="0"/>
+		<comment><![CDATA[AtomKey string from Bio.PDB.internal_coords]]></comment>
+	</column>
+	<column name="crc_key">
+		<type name="integer" length="0"/>
+		<comment><![CDATA[covalent radii class foreign key]]></comment>
+	</column>
+	<constraint name="pk_atom_key" type="pk-constr" table="public.atom">
+		<columns names="atom_key" ref-type="src-columns"/>
+	</constraint>
+	<constraint name="uniq_res_atomname" type="uq-constr" table="public.atom">
+		<columns names="res_key,atom_name" ref-type="src-columns"/>
+	</constraint>
+</table>
+
+<sequence name="hedron_seq" cycle="false" start="1" increment="1" min-value="0" max-value="2147483647" cache="1">
+	<schema name="public"/>
+	<role name="rfold"/>
+</sequence>
+
+<table name="hedron" layers="0" collapse-mode="2" max-obj-count="15" z-value="0">
+	<schema name="public"/>
+	<role name="rfold"/>
+	<position x="2080" y="1040"/>
+	<column name="hedron_key" not-null="true" sequence="public.hedron_seq">
+		<type name="integer" length="0"/>
+	</column>
+	<column name="res_key">
+		<type name="integer" length="0"/>
+		<comment><![CDATA[residue of first AtomKey]]></comment>
+	</column>
+	<column name="ak_str">
+		<type name="varchar" length="0"/>
+	</column>
+	<column name="ak1" not-null="true">
+		<type name="integer" length="0"/>
+	</column>
+	<column name="ak2" not-null="true">
+		<type name="integer" length="0"/>
+	</column>
+	<column name="ak3" not-null="true">
+		<type name="integer" length="0"/>
+	</column>
+	<column name="class_key">
+		<type name="integer" length="0"/>
+	</column>
+	<column name="r_class_key">
+		<type name="integer" length="0"/>
+	</column>
+	<column name="cr_class_key">
+		<type name="integer" length="0"/>
+	</column>
+	<column name="angle">
+		<type name="double precision" length="0"/>
+	</column>
+	<column name="len12">
+		<type name="double precision" length="0"/>
+	</column>
+	<column name="len23">
+		<type name="double precision" length="0"/>
+	</column>
+	<column name="len13">
+		<type name="double precision" length="0"/>
+	</column>
+	<constraint name="pk_hedron_key" type="pk-constr" table="public.hedron">
+		<columns names="hedron_key" ref-type="src-columns"/>
+	</constraint>
+	<constraint name="uniq_res_hakstr" type="uq-constr" table="public.hedron">
+		<columns names="res_key,ak_str" ref-type="src-columns"/>
+	</constraint>
+</table>
+
+<sequence name="hc_seq" cycle="false" start="1" increment="1" min-value="0" max-value="2147483647" cache="1">
+	<schema name="public"/>
+	<role name="rfold"/>
+</sequence>
+
+<sequence name="hrc_seq" cycle="false" start="1" increment="1" min-value="0" max-value="2147483647" cache="1">
+	<schema name="public"/>
+	<role name="rfold"/>
+</sequence>
+
+<sequence name="hcrc_seq" cycle="false" start="1" increment="1" min-value="0" max-value="2147483647" cache="1">
+	<schema name="public"/>
+	<role name="rfold"/>
+</sequence>
+
+<table name="hedron_class" layers="0" collapse-mode="2" max-obj-count="2" z-value="0">
+	<schema name="public"/>
+	<role name="rfold"/>
+	<position x="2320" y="1060"/>
+	<column name="hc_key" not-null="true" sequence="public.hc_seq">
+		<type name="integer" length="0"/>
+	</column>
+	<column name="h_class" not-null="true">
+		<type name="varchar" length="0"/>
+	</column>
+	<constraint name="pk_hc_key" type="pk-constr" table="public.hedron_class">
+		<columns names="hc_key" ref-type="src-columns"/>
+	</constraint>
+	<constraint name="uniq_hc" type="uq-constr" table="public.hedron_class">
+		<columns names="h_class" ref-type="src-columns"/>
+	</constraint>
+</table>
+
+<table name="hedron_residue_class" layers="0" collapse-mode="2" max-obj-count="2" z-value="0">
+	<schema name="public"/>
+	<role name="rfold"/>
+	<position x="2320" y="1160"/>
+	<column name="hrc_key" not-null="true" sequence="public.hrc_seq">
+		<type name="integer" length="0"/>
+	</column>
+	<column name="hr_class" not-null="true">
+		<type name="varchar" length="0"/>
+	</column>
+	<constraint name="pk_hrc_key" type="pk-constr" table="public.hedron_residue_class">
+		<columns names="hrc_key" ref-type="src-columns"/>
+	</constraint>
+	<constraint name="uniq_hrc" type="uq-constr" table="public.hedron_residue_class">
+		<columns names="hr_class" ref-type="src-columns"/>
+	</constraint>
+</table>
+
+<table name="hedron_cr_class" layers="0" collapse-mode="2" max-obj-count="2" z-value="0">
+	<schema name="public"/>
+	<role name="rfold"/>
+	<position x="2320" y="1260"/>
+	<column name="hcrc_key" not-null="true" sequence="public.hcrc_seq">
+		<type name="integer" length="0"/>
+	</column>
+	<column name="hcr_class" not-null="true">
+		<type name="varchar" length="0"/>
+	</column>
+	<constraint name="pk_hcr_key" type="pk-constr" table="public.hedron_cr_class">
+		<columns names="hcrc_key" ref-type="src-columns"/>
+	</constraint>
+	<constraint name="uniq_hcrc" type="uq-constr" table="public.hedron_cr_class">
+		<columns names="hcr_class" ref-type="src-columns"/>
+	</constraint>
+</table>
+
+<table name="residue" layers="0" collapse-mode="2" max-obj-count="12" z-value="0">
+	<schema name="public"/>
+	<role name="rfold"/>
+	<position x="1240" y="560"/>
+	<column name="res_key" not-null="true" sequence="public.residue_seq">
+		<type name="integer" length="0"/>
+	</column>
+	<column name="chain_key" not-null="true">
+		<type name="integer" length="0"/>
+	</column>
+	<column name="res_char" not-null="true">
+		<type name="varchar" length="0"/>
+		<comment><![CDATA[residue character, e.g. R for arginine]]></comment>
+	</column>
+	<column name="res_seqpos" not-null="true">
+		<type name="varchar" length="0"/>
+		<comment><![CDATA[residue character, sequence postion, optional insert code e.g. R32A]]></comment>
+	</column>
+	<column name="std_all_angles" not-null="true" default-value="False">
+		<type name="bool" length="0"/>
+		<comment><![CDATA[std residue and all di/hedra, ignoring Hs]]></comment>
+	</column>
+	<column name="dssp">
+		<type name="varchar" length="0"/>
+	</column>
+	<column name="asa">
+		<type name="integer" length="0"/>
+	</column>
+	<column name="rasa">
+		<type name="float" length="0"/>
+	</column>
+	<column name="rprev">
+		<type name="integer" length="0"/>
+	</column>
+	<column name="rnext">
+		<type name="integer" length="0"/>
+	</column>
+	<constraint name="pk_res_key" type="pk-constr" table="public.residue">
+		<columns names="res_key" ref-type="src-columns"/>
+	</constraint>
+	<constraint name="uniq_seqpos_chainkey" type="uq-constr" table="public.residue">
+		<columns names="res_seqpos,chain_key" ref-type="src-columns"/>
+	</constraint>
+</table>
+
+<table name="atom_covalent_radii" layers="0" collapse-mode="2" max-obj-count="3" z-value="0">
+	<schema name="public"/>
+	<role name="rfold"/>
+	<position x="940" y="1420"/>
+	<column name="acr_key" not-null="true" sequence="public.acr_seq">
+		<type name="integer" length="0"/>
+	</column>
+	<column name="cr_class" not-null="true">
+		<type name="varchar" length="0"/>
+	</column>
+	<column name="cr_radius" not-null="true">
+		<type name="real" length="0"/>
+	</column>
+	<constraint name="pk_acr_key" type="pk-constr" table="public.atom_covalent_radii">
+		<columns names="acr_key" ref-type="src-columns"/>
+	</constraint>
+	<constraint name="uniq_cr_class" type="uq-constr" table="public.atom_covalent_radii">
+		<columns names="cr_class" ref-type="src-columns"/>
+	</constraint>
+</table>
+
+<sequence name="dihedron_seq" cycle="false" start="1" increment="1" min-value="0" max-value="2147483647" cache="1">
+	<schema name="public"/>
+	<role name="rfold"/>
+</sequence>
+
+<table name="dihedron" layers="0" collapse-mode="2" max-obj-count="14" z-value="0">
+	<schema name="public"/>
+	<role name="rfold"/>
+	<position x="2060" y="620"/>
+	<column name="dihedron_key" not-null="true" sequence="public.dihedron_seq">
+		<type name="integer" length="0"/>
+	</column>
+	<column name="res_key">
+		<type name="integer" length="0"/>
+		<comment><![CDATA[residue of first (atom of first) hedron key]]></comment>
+	</column>
+	<column name="ak_str">
+		<type name="varchar" length="0"/>
+	</column>
+	<column name="hk1">
+		<type name="integer" length="0"/>
+	</column>
+	<column name="hk2">
+		<type name="integer" length="0"/>
+	</column>
+	<column name="reverse">
+		<type name="bool" length="0"/>
+	</column>
+	<column name="class_key">
+		<type name="integer" length="0"/>
+	</column>
+	<column name="r_class_key">
+		<type name="integer" length="0"/>
+	</column>
+	<column name="cr_class_key">
+		<type name="integer" length="0"/>
+	</column>
+	<column name="angle">
+		<type name="double precision" length="0"/>
+	</column>
+	<column name="len14">
+		<type name="double precision" length="0"/>
+	</column>
+	<column name="chirality">
+		<type name="smallint" length="0"/>
+	</column>
+	<constraint name="pk_kihedron_key" type="pk-constr" table="public.dihedron">
+		<columns names="dihedron_key" ref-type="src-columns"/>
+	</constraint>
+	<constraint name="uniq_res_dakstr" type="uq-constr" table="public.dihedron">
+		<columns names="res_key,ak_str" ref-type="src-columns"/>
+	</constraint>
+</table>
+
+<sequence name="drc_seq" cycle="false" start="1" increment="1" min-value="0" max-value="2147483647" cache="1">
+	<schema name="public"/>
+	<role name="rfold"/>
+</sequence>
+
+<sequence name="dcrc_seq" cycle="false" start="1" increment="1" min-value="0" max-value="2147483647" cache="1">
+	<schema name="public"/>
+	<role name="rfold"/>
+</sequence>
+
+<sequence name="dc_seq" cycle="false" start="1" increment="1" min-value="0" max-value="2147483647" cache="1">
+	<schema name="public"/>
+	<role name="rfold"/>
+</sequence>
+
+<table name="dihedron_class" layers="0" collapse-mode="2" max-obj-count="2" z-value="0">
+	<schema name="public"/>
+	<role name="rfold"/>
+	<position x="2320" y="640"/>
+	<column name="dc_key" not-null="true" sequence="public.dc_seq">
+		<type name="integer" length="0"/>
+	</column>
+	<column name="d_class" not-null="true">
+		<type name="varchar" length="0"/>
+	</column>
+	<constraint name="pk_dc_key" type="pk-constr" table="public.dihedron_class">
+		<columns names="dc_key" ref-type="src-columns"/>
+	</constraint>
+	<constraint name="uniq_dc" type="uq-constr" table="public.dihedron_class">
+		<columns names="d_class" ref-type="src-columns"/>
+	</constraint>
+</table>
+
+<table name="dihedron_cr_class" layers="0" collapse-mode="2" max-obj-count="2" z-value="0">
+	<schema name="public"/>
+	<role name="rfold"/>
+	<position x="2320" y="880"/>
+	<column name="dcrc_key" not-null="true" sequence="public.dcrc_seq">
+		<type name="integer" length="0"/>
+	</column>
+	<column name="dcr_class" not-null="true">
+		<type name="varchar" length="0"/>
+	</column>
+	<constraint name="pk_dcr_key" type="pk-constr" table="public.dihedron_cr_class">
+		<columns names="dcrc_key" ref-type="src-columns"/>
+	</constraint>
+	<constraint name="uniq_dcrc" type="uq-constr" table="public.dihedron_cr_class">
+		<columns names="dcr_class" ref-type="src-columns"/>
+	</constraint>
+</table>
+
+<table name="dihedron_residue_class" layers="0" collapse-mode="2" max-obj-count="2" z-value="0">
+	<schema name="public"/>
+	<role name="rfold"/>
+	<position x="2320" y="760"/>
+	<column name="drc_key" not-null="true" sequence="public.drc_seq">
+		<type name="integer" length="0"/>
+	</column>
+	<column name="dr_class" not-null="true">
+		<type name="varchar" length="0"/>
+	</column>
+	<constraint name="pk_drc_key" type="pk-constr" table="public.dihedron_residue_class">
+		<columns names="drc_key" ref-type="src-columns"/>
+	</constraint>
+	<constraint name="uniq_drc" type="uq-constr" table="public.dihedron_residue_class">
+		<columns names="dr_class" ref-type="src-columns"/>
+	</constraint>
+</table>
+
+<sequence name="env_atoms_seq" cycle="false" start="1" increment="1" min-value="0" max-value="2147483647" cache="1">
+	<schema name="public"/>
+	<role name="rfold"/>
+</sequence>
+
+<sequence name="acrp_seq" cycle="false" start="1" increment="1" min-value="0" max-value="2147483647" cache="1">
+	<schema name="public"/>
+	<role name="rfold"/>
+</sequence>
+
+<table name="acr_pairs" layers="0" collapse-mode="2" max-obj-count="6" z-value="0">
+	<schema name="public"/>
+	<role name="rfold"/>
+	<position x="1380" y="1400"/>
+	<column name="acrp_key" not-null="true" sequence="public.acrp_seq">
+		<type name="integer" length="0"/>
+	</column>
+	<column name="acr1_key">
+		<type name="integer" length="0"/>
+	</column>
+	<column name="acr2_key">
+		<type name="integer" length="0"/>
+	</column>
+	<constraint name="pk_acrpk" type="pk-constr" table="public.acr_pairs">
+		<columns names="acrp_key" ref-type="src-columns"/>
+	</constraint>
+	<constraint name="uq_acr12" type="uq-constr" table="public.acr_pairs">
+		<columns names="acr1_key,acr2_key" ref-type="src-columns"/>
+	</constraint>
+	<constraint name="uq_acrpk" type="uq-constr" table="public.acr_pairs">
+		<columns names="acrp_key" ref-type="src-columns"/>
+	</constraint>
+</table>
+
+<sequence name="nbd_seq" cycle="false" start="1" increment="1" min-value="0" max-value="2147483647" cache="1">
+	<schema name="public"/>
+	<role name="rfold"/>
+</sequence>
+
+<table name="non_bond_dists" layers="0" collapse-mode="2" max-obj-count="14" z-value="0">
+	<schema name="public"/>
+	<role name="rfold"/>
+	<position x="1080" y="1080"/>
+	<column name="nbd_key" not-null="true" sequence="public.nbd_seq">
+		<type name="integer" length="0"/>
+	</column>
+	<column name="chain_key">
+		<type name="integer" length="0"/>
+		<comment><![CDATA[null means all chains]]></comment>
+	</column>
+	<column name="acrp_key">
+		<type name="integer" length="0"/>
+		<comment><![CDATA[null means all pairs]]></comment>
+	</column>
+	<column name="dist_num">
+		<type name="smallint" length="0"/>
+	</column>
+	<column name="min">
+		<type name="float" length="0"/>
+	</column>
+	<column name="max">
+		<type name="float" length="0"/>
+	</column>
+	<column name="sum">
+		<type name="float" length="0"/>
+	</column>
+	<column name="count">
+		<type name="integer" length="0"/>
+	</column>
+	<column name="avg">
+		<type name="float" length="0"/>
+	</column>
+	<column name="sum_sd_dev">
+		<type name="float" length="0"/>
+		<comment><![CDATA[sum of squared deviation from mean]]></comment>
+	</column>
+	<column name="sd_count">
+		<type name="integer" length="0"/>
+		<comment><![CDATA[same as count unless not finished second pass]]></comment>
+	</column>
+	<column name="std_dev">
+		<type name="float" length="0"/>
+	</column>
+	<constraint name="pk_nbd_key" type="pk-constr" table="public.non_bond_dists">
+		<columns names="nbd_key" ref-type="src-columns"/>
+	</constraint>
+	<constraint name="uq_chnk_acrpk_dn" type="uq-constr" table="public.non_bond_dists">
+		<columns names="chain_key,acrp_key,dist_num" ref-type="src-columns"/>
+	</constraint>
+</table>
+
+<sequence name="grid_seq" cycle="false" start="1" increment="1" min-value="0" max-value="2147483647" cache="1">
+	<schema name="public"/>
+	<role name="rfold"/>
+</sequence>
+
+<table name="grid" layers="0" collapse-mode="2" max-obj-count="18" z-value="0">
+	<schema name="public"/>
+	<role name="rfold"/>
+	<position x="680" y="360"/>
+	<column name="grid_ref" not-null="true" sequence="public.grid_seq">
+		<type name="integer" length="0"/>
+	</column>
+	<column name="res_char">
+		<type name="char" length="0"/>
+	</column>
+	<column name="step">
+		<type name="float" length="0"/>
+	</column>
+	<column name="multi_hit_cells">
+		<type name="integer" length="0"/>
+	</column>
+	<column name="used_cells">
+		<type name="integer" length="0"/>
+	</column>
+	<column name="total_cells">
+		<type name="integer" length="0"/>
+	</column>
+	<column name="x_start">
+		<type name="float" length="0"/>
+	</column>
+	<column name="x_fin">
+		<type name="float" length="0"/>
+	</column>
+	<column name="x_count">
+		<type name="integer" length="0"/>
+	</column>
+	<column name="y_start">
+		<type name="float" length="0"/>
+	</column>
+	<column name="y_fin">
+		<type name="float" length="0"/>
+	</column>
+	<column name="y_count">
+		<type name="integer" length="0"/>
+	</column>
+	<column name="z_start">
+		<type name="float" length="0"/>
+	</column>
+	<column name="z_fin">
+		<type name="float" length="0"/>
+	</column>
+	<column name="z_count">
+		<type name="integer" length="0"/>
+	</column>
+	<constraint name="pk_grid" type="pk-constr" table="public.grid">
+		<columns names="grid_ref" ref-type="src-columns"/>
+	</constraint>
+	<constraint name="uq_res_step" type="uq-constr" table="public.grid">
+		<columns names="step,res_char" ref-type="src-columns"/>
+	</constraint>
+</table>
+
+<table name="env_atoms" layers="0" collapse-mode="2" max-obj-count="12" z-value="0">
+	<schema name="public"/>
+	<role name="rfold"/>
+	<position x="660" y="680"/>
+	<column name="ea_key" not-null="true" sequence="public.env_atoms_seq">
+		<type name="integer" length="0"/>
+	</column>
+	<column name="res_key">
+		<type name="integer" length="0"/>
+		<comment><![CDATA[C-alpha residue fk]]></comment>
+	</column>
+	<column name="env_atom">
+		<type name="integer" length="0"/>
+		<comment><![CDATA[referenced environmental atom fk]]></comment>
+	</column>
+	<column name="x">
+		<type name="real" length="0"/>
+	</column>
+	<column name="y">
+		<type name="real" length="0"/>
+	</column>
+	<column name="z">
+		<type name="real" length="0"/>
+	</column>
+	<column name="min">
+		<type name="float" length="0"/>
+	</column>
+	<column name="min_partner">
+		<type name="integer" length="0"/>
+	</column>
+	<column name="max">
+		<type name="float" length="0"/>
+	</column>
+	<column name="max_partner">
+		<type name="integer" length="0"/>
+	</column>
+	<constraint name="pk_env_atoms" type="pk-constr" table="public.env_atoms">
+		<columns names="ea_key" ref-type="src-columns"/>
+	</constraint>
+	<constraint name="uq_ca_res_env_atom" type="uq-constr" table="public.env_atoms">
+		<columns names="res_key,env_atom" ref-type="src-columns"/>
+	</constraint>
+</table>
+
+<table name="ea_grid" layers="0" collapse-mode="2" max-obj-count="6" z-value="0">
+	<schema name="public"/>
+	<role name="rfold"/>
+	<position x="360" y="700"/>
+	<column name="ea_key" not-null="true">
+		<type name="integer" length="0"/>
+	</column>
+	<column name="gp_key" not-null="true">
+		<type name="integer" length="0"/>
+	</column>
+	<column name="grid_ref">
+		<type name="integer" length="0"/>
+	</column>
+	<constraint name="pk_ea_gp" type="pk-constr" table="public.ea_grid">
+		<columns names="ea_key,gp_key" ref-type="src-columns"/>
+	</constraint>
+	<constraint name="uq_ea_grid" type="uq-constr" table="public.ea_grid">
+		<columns names="ea_key,grid_ref" ref-type="src-columns"/>
+	</constraint>
+</table>
+
+<sequence name="grid_point_seq" cycle="false" start="1" increment="1" min-value="0" max-value="2147483647" cache="1">
+	<schema name="public"/>
+	<role name="rfold"/>
+</sequence>
+
+<table name="grid_point" layers="0" collapse-mode="2" max-obj-count="8" z-value="0">
+	<schema name="public"/>
+	<role name="rfold"/>
+	<position x="360" y="380"/>
+	<column name="gp_key" not-null="true" sequence="public.grid_point_seq">
+		<type name="integer" length="0"/>
+	</column>
+	<column name="grid_ref">
+		<type name="integer" length="0"/>
+	</column>
+	<column name="index">
+		<type name="integer" length="0"/>
+	</column>
+	<column name="x">
+		<type name="real" length="0"/>
+	</column>
+	<column name="y">
+		<type name="real" length="0"/>
+	</column>
+	<column name="z">
+		<type name="real" length="0"/>
+	</column>
+	<column name="count">
+		<type name="integer" length="0"/>
+	</column>
+	<constraint name="pk_grid_point" type="pk-constr" table="public.grid_point">
+		<columns names="gp_key" ref-type="src-columns"/>
+	</constraint>
+	<constraint name="uq_grid_ndx" type="uq-constr" table="public.grid_point">
+		<columns names="grid_ref,index" ref-type="src-columns"/>
+	</constraint>
+</table>
+
+<table name="dhlen" layers="0" collapse-mode="2" max-obj-count="2" z-value="0">
+	<schema name="public"/>
+	<role name="rfold"/>
+	<comment><![CDATA[numpy -1/+1 normalised dihedra len14 per residue]]></comment>
+	<position x="1340" y="220"/>
+	<column name="res_key" not-null="true">
+		<type name="integer" length="0"/>
+	</column>
+	<column name="bytes">
+		<type name="bytea" length="0"/>
+		<comment><![CDATA[numpy float32 data]]></comment>
+	</column>
+	<constraint name="dhl_pk_rk" type="pk-constr" table="public.dhlen">
+		<columns names="res_key" ref-type="src-columns"/>
+	</constraint>
+</table>
+
+<table name="dhchirality" layers="0" collapse-mode="2" max-obj-count="2" z-value="0">
+	<schema name="public"/>
+	<role name="rfold"/>
+	<comment><![CDATA[numpy -1/+1 normalised dihedra chirality per residue]]></comment>
+	<position x="1560" y="100"/>
+	<column name="res_key" not-null="true">
+		<type name="integer" length="0"/>
+	</column>
+	<column name="bytes">
+		<type name="bytea" length="0"/>
+		<comment><![CDATA[numpy float32 data]]></comment>
+	</column>
+	<constraint name="dhc_pk_rk" type="pk-constr" table="public.dhchirality">
+		<columns names="res_key" ref-type="src-columns"/>
+	</constraint>
+</table>
+
+<table name="hlen" layers="0" collapse-mode="2" max-obj-count="2" z-value="0">
+	<schema name="public"/>
+	<role name="rfold"/>
+	<comment><![CDATA[numpy -1/+1 normalised hedra len12, len23, len13 per residue]]></comment>
+	<position x="1560" y="220"/>
+	<column name="res_key" not-null="true">
+		<type name="integer" length="0"/>
+	</column>
+	<column name="bytes">
+		<type name="bytea" length="0"/>
+		<comment><![CDATA[numpy float32 data]]></comment>
+	</column>
+	<constraint name="hl_pk_rk" type="pk-constr" table="public.hlen">
+		<columns names="res_key" ref-type="src-columns"/>
+	</constraint>
+</table>
+
+<table name="eagn" layers="0" collapse-mode="2" max-obj-count="3" z-value="0">
+	<schema name="public"/>
+	<role name="rfold"/>
+	<comment><![CDATA[env atom grid normalised]]></comment>
+	<position x="1080" y="240"/>
+	<column name="res_key" not-null="true">
+		<type name="integer" length="0"/>
+	</column>
+	<column name="grid_ref" not-null="true">
+		<type name="integer" length="0"/>
+	</column>
+	<column name="jdict">
+		<type name="jsonb" length="0"/>
+	</column>
+	<constraint name="eagn_pk_rk_gref" type="pk-constr" table="public.eagn">
+		<columns names="res_key,grid_ref" ref-type="src-columns"/>
+	</constraint>
+</table>
+
+<table name="len_normalization" layers="0" collapse-mode="2" max-obj-count="3" z-value="0">
+	<schema name="public"/>
+	<role name="rfold"/>
+	<position x="1080" y="100"/>
+	<column name="name" not-null="true">
+		<type name="varchar" length="0"/>
+	</column>
+	<column name="min">
+		<type name="double precision" length="0"/>
+	</column>
+	<column name="range">
+		<type name="double precision" length="0"/>
+	</column>
+	<constraint name="pk_normalization" type="pk-constr" table="public.len_normalization">
+		<columns names="name" ref-type="src-columns"/>
+	</constraint>
+</table>
+
+<table name="dhcoords" layers="0" collapse-mode="2" max-obj-count="2" z-value="0">
+	<schema name="public"/>
+	<role name="rfold"/>
+	<comment><![CDATA[numpy array of n x 4 atoms x 3+1 coords of dihedron at origin]]></comment>
+	<position x="1340" y="100"/>
+	<column name="res_key" not-null="true">
+		<type name="integer" length="0"/>
+	</column>
+	<column name="bytes">
+		<type name="bytea" length="0"/>
+		<comment><![CDATA[numpy float32 data]]></comment>
+	</column>
+	<constraint name="dhc_pk_rk_1" type="pk-constr" table="public.dhcoords">
+		<columns names="res_key" ref-type="src-columns"/>
+	</constraint>
+</table>
+
+<index name="idx_dihedron_hk1" table="public.dihedron"
+	 concurrent="false" unique="false" fast-update="false" buffering="false"
+	 index-type="btree" factor="0">
+		<idxelement use-sorting="false">
+			<column name="hk1"/>
+		</idxelement>
+</index>
+
+<index name="idx_dihedron_hk2" table="public.dihedron"
+	 concurrent="false" unique="false" fast-update="false" buffering="false"
+	 index-type="btree" factor="0">
+		<idxelement use-sorting="false">
+			<column name="hk2"/>
+		</idxelement>
+</index>
+
+<index name="idx_hedron_ak1" table="public.hedron"
+	 concurrent="false" unique="false" fast-update="false" buffering="false"
+	 index-type="btree" factor="0">
+		<idxelement use-sorting="false">
+			<column name="ak1"/>
+		</idxelement>
+</index>
+
+<index name="idx_hedron_ak2" table="public.hedron"
+	 concurrent="false" unique="false" fast-update="false" buffering="false"
+	 index-type="btree" factor="0">
+		<idxelement use-sorting="false">
+			<column name="ak2"/>
+		</idxelement>
+</index>
+
+<index name="idx_hedron_ak3" table="public.hedron"
+	 concurrent="false" unique="false" fast-update="false" buffering="false"
+	 index-type="btree" factor="0">
+		<idxelement use-sorting="false">
+			<column name="ak3"/>
+		</idxelement>
+</index>
+
+<index name="idx_atom_res_key" table="public.atom"
+	 concurrent="false" unique="false" fast-update="false" buffering="false"
+	 index-type="btree" factor="0">
+		<idxelement use-sorting="false">
+			<column name="res_key"/>
+		</idxelement>
+</index>
+
+<index name="idx_residue_chain_key" table="public.residue"
+	 concurrent="false" unique="false" fast-update="false" buffering="false"
+	 index-type="btree" factor="0">
+		<idxelement use-sorting="false">
+			<column name="chain_key"/>
+		</idxelement>
+</index>
+
+<index name="idx_env_atoms_env_atom" table="public.env_atoms"
+	 concurrent="false" unique="false" fast-update="false" buffering="false"
+	 index-type="btree" factor="0">
+		<idxelement use-sorting="false">
+			<column name="env_atom"/>
+		</idxelement>
+</index>
+
+<index name="idx_env_atoms_res_key" table="public.env_atoms"
+	 concurrent="false" unique="false" fast-update="false" buffering="false"
+	 index-type="btree" factor="0">
+		<idxelement use-sorting="false">
+			<column name="res_key"/>
+		</idxelement>
+</index>
+
+<index name="idx_env_atoms_minp" table="public.env_atoms"
+	 concurrent="false" unique="false" fast-update="false" buffering="false"
+	 index-type="btree" factor="0">
+		<idxelement use-sorting="false">
+			<column name="min_partner"/>
+		</idxelement>
+</index>
+
+<index name="idx_env_atoms_maxp" table="public.env_atoms"
+	 concurrent="false" unique="false" fast-update="false" buffering="false"
+	 index-type="btree" factor="0">
+		<idxelement use-sorting="false">
+			<column name="max_partner"/>
+		</idxelement>
+</index>
+
+<table name="grid_point_counts" layers="0" collapse-mode="2" max-obj-count="15" z-value="0">
+	<schema name="public"/>
+	<role name="rfold"/>
+	<position x="340" y="20"/>
+	<column name="gp_key" not-null="true">
+		<type name="integer" length="0"/>
+	</column>
+	<column name="res_char">
+		<type name="varchar" length="0"/>
+	</column>
+	<column name="csb">
+		<type name="double precision" length="0"/>
+	</column>
+	<column name="cres">
+		<type name="double precision" length="0"/>
+	</column>
+	<column name="cdb">
+		<type name="double precision" length="0"/>
+	</column>
+	<column name="osb">
+		<type name="double precision" length="0"/>
+	</column>
+	<column name="ores">
+		<type name="double precision" length="0"/>
+	</column>
+	<column name="odb">
+		<type name="double precision" length="0"/>
+	</column>
+	<column name="nsb">
+		<type name="double precision" length="0"/>
+	</column>
+	<column name="nres">
+		<type name="double precision" length="0"/>
+	</column>
+	<column name="ndb">
+		<type name="double precision" length="0"/>
+	</column>
+	<column name="ssb">
+		<type name="double precision" length="0"/>
+	</column>
+	<column name="hsb">
+		<type name="double precision" length="0"/>
+	</column>
+	<constraint name="pk_grid_point_counts" type="pk-constr" table="public.grid_point_counts">
+		<columns names="gp_key" ref-type="src-columns"/>
+	</constraint>
+</table>
+
+<table name="grid_atom_counts" layers="0" collapse-mode="2" max-obj-count="15" z-value="0">
+	<schema name="public"/>
+	<role name="rfold"/>
+	<position x="640" y="40"/>
+	<column name="grid_ref" not-null="true">
+		<type name="integer" length="0"/>
+	</column>
+	<column name="res_char">
+		<type name="varchar" length="0"/>
+	</column>
+	<column name="csb">
+		<type name="integer" length="0"/>
+	</column>
+	<column name="cres">
+		<type name="integer" length="0"/>
+	</column>
+	<column name="cdb">
+		<type name="integer" length="0"/>
+	</column>
+	<column name="osb">
+		<type name="integer" length="0"/>
+	</column>
+	<column name="ores">
+		<type name="integer" length="0"/>
+	</column>
+	<column name="odb">
+		<type name="integer" length="0"/>
+	</column>
+	<column name="nsb">
+		<type name="integer" length="0"/>
+	</column>
+	<column name="nres">
+		<type name="integer" length="0"/>
+	</column>
+	<column name="ndb">
+		<type name="integer" length="0"/>
+	</column>
+	<column name="ssb">
+		<type name="integer" length="0"/>
+	</column>
+	<column name="hsb">
+		<type name="integer" length="0"/>
+	</column>
+	<constraint name="pk_grid_point_counts_cp" type="pk-constr" table="public.grid_atom_counts">
+		<columns names="grid_ref" ref-type="src-columns"/>
+	</constraint>
+</table>
+
+<table name="grid_point_nlp" layers="0" collapse-mode="2" max-obj-count="15" z-value="0">
+	<schema name="public"/>
+	<role name="rfold"/>
+	<position x="0" y="60"/>
+	<column name="gp_key" not-null="true">
+		<type name="integer" length="0"/>
+	</column>
+	<column name="res_char">
+		<type name="varchar" length="0"/>
+	</column>
+	<column name="csb">
+		<type name="double precision" length="0"/>
+	</column>
+	<column name="cres">
+		<type name="double precision" length="0"/>
+	</column>
+	<column name="cdb">
+		<type name="double precision" length="0"/>
+	</column>
+	<column name="osb">
+		<type name="double precision" length="0"/>
+	</column>
+	<column name="ores">
+		<type name="double precision" length="0"/>
+	</column>
+	<column name="odb">
+		<type name="double precision" length="0"/>
+	</column>
+	<column name="nsb">
+		<type name="double precision" length="0"/>
+	</column>
+	<column name="nres">
+		<type name="double precision" length="0"/>
+	</column>
+	<column name="ndb">
+		<type name="double precision" length="0"/>
+	</column>
+	<column name="ssb">
+		<type name="double precision" length="0"/>
+	</column>
+	<column name="hsb">
+		<type name="double precision" length="0"/>
+	</column>
+	<constraint name="pk_grid_point_nlp_cp" type="pk-constr" table="public.grid_point_nlp">
+		<columns names="gp_key" ref-type="src-columns"/>
+	</constraint>
+</table>
+
+<constraint name="fk_pdb_key" type="fk-constr" comparison-type="MATCH SIMPLE"
+	 upd-action="NO ACTION" del-action="CASCADE" ref-table="public.pdb" table="public.chain">
+	<columns names="pdb_key" ref-type="src-columns"/>
+	<columns names="pdb_key" ref-type="dst-columns"/>
+</constraint>
+
+<constraint name="fk_residue_key" type="fk-constr" comparison-type="MATCH SIMPLE"
+	 upd-action="NO ACTION" del-action="CASCADE" ref-table="public.residue" table="public.atom">
+	<columns names="res_key" ref-type="src-columns"/>
+	<columns names="res_key" ref-type="dst-columns"/>
+</constraint>
+
+<constraint name="fk_acr_key" type="fk-constr" comparison-type="MATCH SIMPLE"
+	 upd-action="NO ACTION" del-action="NO ACTION" ref-table="public.atom_covalent_radii" table="public.atom">
+	<columns names="crc_key" ref-type="src-columns"/>
+	<columns names="acr_key" ref-type="dst-columns"/>
+</constraint>
+
+<constraint name="fk_residue_key" type="fk-constr" comparison-type="MATCH SIMPLE"
+	 upd-action="NO ACTION" del-action="CASCADE" ref-table="public.residue" table="public.hedron">
+	<columns names="res_key" ref-type="src-columns"/>
+	<columns names="res_key" ref-type="dst-columns"/>
+</constraint>
+
+<constraint name="fk_ak1" type="fk-constr" comparison-type="MATCH SIMPLE"
+	 upd-action="NO ACTION" del-action="NO ACTION" ref-table="public.atom" table="public.hedron">
+	<columns names="ak1" ref-type="src-columns"/>
+	<columns names="atom_key" ref-type="dst-columns"/>
+</constraint>
+
+<constraint name="fk_ak2" type="fk-constr" comparison-type="MATCH SIMPLE"
+	 upd-action="NO ACTION" del-action="NO ACTION" ref-table="public.atom" table="public.hedron">
+	<columns names="ak2" ref-type="src-columns"/>
+	<columns names="atom_key" ref-type="dst-columns"/>
+</constraint>
+
+<constraint name="fk_ak3" type="fk-constr" comparison-type="MATCH SIMPLE"
+	 upd-action="NO ACTION" del-action="NO ACTION" ref-table="public.atom" table="public.hedron">
+	<columns names="ak3" ref-type="src-columns"/>
+	<columns names="atom_key" ref-type="dst-columns"/>
+</constraint>
+
+<constraint name="fk_hc_key" type="fk-constr" comparison-type="MATCH SIMPLE"
+	 upd-action="NO ACTION" del-action="NO ACTION" ref-table="public.hedron_class" table="public.hedron">
+	<columns names="class_key" ref-type="src-columns"/>
+	<columns names="hc_key" ref-type="dst-columns"/>
+</constraint>
+
+<constraint name="fk_hrc_key" type="fk-constr" comparison-type="MATCH SIMPLE"
+	 upd-action="NO ACTION" del-action="NO ACTION" ref-table="public.hedron_residue_class" table="public.hedron">
+	<columns names="r_class_key" ref-type="src-columns"/>
+	<columns names="hrc_key" ref-type="dst-columns"/>
+</constraint>
+
+<constraint name="fk_hcrc_key" type="fk-constr" comparison-type="MATCH SIMPLE"
+	 upd-action="NO ACTION" del-action="NO ACTION" ref-table="public.hedron_cr_class" table="public.hedron">
+	<columns names="cr_class_key" ref-type="src-columns"/>
+	<columns names="hcrc_key" ref-type="dst-columns"/>
+</constraint>
+
+<constraint name="fk_chain_key" type="fk-constr" comparison-type="MATCH SIMPLE"
+	 upd-action="NO ACTION" del-action="CASCADE" ref-table="public.chain" table="public.residue">
+	<columns names="chain_key" ref-type="src-columns"/>
+	<columns names="chain_key" ref-type="dst-columns"/>
+</constraint>
+
+<constraint name="fk_residue_key" type="fk-constr" comparison-type="MATCH SIMPLE"
+	 upd-action="NO ACTION" del-action="CASCADE" ref-table="public.residue" table="public.dihedron">
+	<columns names="res_key" ref-type="src-columns"/>
+	<columns names="res_key" ref-type="dst-columns"/>
+</constraint>
+
+<constraint name="fk_hk1" type="fk-constr" comparison-type="MATCH SIMPLE"
+	 upd-action="NO ACTION" del-action="NO ACTION" ref-table="public.hedron" table="public.dihedron">
+	<columns names="hk1" ref-type="src-columns"/>
+	<columns names="hedron_key" ref-type="dst-columns"/>
+</constraint>
+
+<constraint name="fk_hk2" type="fk-constr" comparison-type="MATCH SIMPLE"
+	 upd-action="NO ACTION" del-action="NO ACTION" ref-table="public.hedron" table="public.dihedron">
+	<columns names="hk2" ref-type="src-columns"/>
+	<columns names="hedron_key" ref-type="dst-columns"/>
+</constraint>
+
+<constraint name="fk_dc_key" type="fk-constr" comparison-type="MATCH SIMPLE"
+	 upd-action="NO ACTION" del-action="NO ACTION" ref-table="public.dihedron_class" table="public.dihedron">
+	<columns names="class_key" ref-type="src-columns"/>
+	<columns names="dc_key" ref-type="dst-columns"/>
+</constraint>
+
+<constraint name="fk_drc_key" type="fk-constr" comparison-type="MATCH SIMPLE"
+	 upd-action="NO ACTION" del-action="NO ACTION" ref-table="public.dihedron_residue_class" table="public.dihedron">
+	<columns names="r_class_key" ref-type="src-columns"/>
+	<columns names="drc_key" ref-type="dst-columns"/>
+</constraint>
+
+<constraint name="fk_dcrc_key" type="fk-constr" comparison-type="MATCH SIMPLE"
+	 upd-action="NO ACTION" del-action="NO ACTION" ref-table="public.dihedron_cr_class" table="public.dihedron">
+	<columns names="cr_class_key" ref-type="src-columns"/>
+	<columns names="dcrc_key" ref-type="dst-columns"/>
+</constraint>
+
+<constraint name="fk_acr1" type="fk-constr" comparison-type="MATCH SIMPLE"
+	 upd-action="NO ACTION" del-action="CASCADE" ref-table="public.atom_covalent_radii" table="public.acr_pairs">
+	<columns names="acr1_key" ref-type="src-columns"/>
+	<columns names="acr_key" ref-type="dst-columns"/>
+</constraint>
+
+<constraint name="fk_acr2" type="fk-constr" comparison-type="MATCH SIMPLE"
+	 upd-action="NO ACTION" del-action="CASCADE" ref-table="public.atom_covalent_radii" table="public.acr_pairs">
+	<columns names="acr2_key" ref-type="src-columns"/>
+	<columns names="acr_key" ref-type="dst-columns"/>
+</constraint>
+
+<constraint name="fk_chain_key" type="fk-constr" comparison-type="MATCH SIMPLE"
+	 upd-action="NO ACTION" del-action="CASCADE" ref-table="public.chain" table="public.non_bond_dists">
+	<columns names="chain_key" ref-type="src-columns"/>
+	<columns names="chain_key" ref-type="dst-columns"/>
+</constraint>
+
+<constraint name="fk_acrp_key" type="fk-constr" comparison-type="MATCH SIMPLE"
+	 upd-action="NO ACTION" del-action="NO ACTION" ref-table="public.acr_pairs" table="public.non_bond_dists">
+	<columns names="acrp_key" ref-type="src-columns"/>
+	<columns names="acrp_key" ref-type="dst-columns"/>
+</constraint>
+
+<constraint name="fk_ca_res" type="fk-constr" comparison-type="MATCH SIMPLE"
+	 upd-action="NO ACTION" del-action="CASCADE" ref-table="public.residue" table="public.env_atoms">
+	<columns names="res_key" ref-type="src-columns"/>
+	<columns names="res_key" ref-type="dst-columns"/>
+</constraint>
+
+<constraint name="fk_env_atom" type="fk-constr" comparison-type="MATCH SIMPLE"
+	 upd-action="NO ACTION" del-action="NO ACTION" ref-table="public.atom" table="public.env_atoms">
+	<columns names="env_atom" ref-type="src-columns"/>
+	<columns names="atom_key" ref-type="dst-columns"/>
+</constraint>
+
+<constraint name="fk_minp" type="fk-constr" comparison-type="MATCH SIMPLE"
+	 upd-action="NO ACTION" del-action="NO ACTION" ref-table="public.atom" table="public.env_atoms">
+	<columns names="min_partner" ref-type="src-columns"/>
+	<columns names="atom_key" ref-type="dst-columns"/>
+</constraint>
+
+<constraint name="fk_maxp" type="fk-constr" comparison-type="MATCH SIMPLE"
+	 upd-action="NO ACTION" del-action="NO ACTION" ref-table="public.atom" table="public.env_atoms">
+	<columns names="max_partner" ref-type="src-columns"/>
+	<columns names="atom_key" ref-type="dst-columns"/>
+</constraint>
+
+<constraint name="fk_ea_key" type="fk-constr" comparison-type="MATCH SIMPLE"
+	 upd-action="NO ACTION" del-action="CASCADE" ref-table="public.env_atoms" table="public.ea_grid">
+	<columns names="ea_key" ref-type="src-columns"/>
+	<columns names="ea_key" ref-type="dst-columns"/>
+</constraint>
+
+<constraint name="fk_grid_point" type="fk-constr" comparison-type="MATCH SIMPLE"
+	 upd-action="NO ACTION" del-action="NO ACTION" ref-table="public.grid_point" table="public.ea_grid">
+	<columns names="gp_key" ref-type="src-columns"/>
+	<columns names="gp_key" ref-type="dst-columns"/>
+</constraint>
+
+<constraint name="fk_grid_ref" type="fk-constr" comparison-type="MATCH SIMPLE"
+	 upd-action="NO ACTION" del-action="NO ACTION" ref-table="public.grid" table="public.ea_grid">
+	<columns names="grid_ref" ref-type="src-columns"/>
+	<columns names="grid_ref" ref-type="dst-columns"/>
+</constraint>
+
+<constraint name="fk_grid" type="fk-constr" comparison-type="MATCH SIMPLE"
+	 upd-action="NO ACTION" del-action="CASCADE" ref-table="public.grid" table="public.grid_point">
+	<columns names="grid_ref" ref-type="src-columns"/>
+	<columns names="grid_ref" ref-type="dst-columns"/>
+</constraint>
+
+<constraint name="dhl_fk_rk" type="fk-constr" comparison-type="MATCH SIMPLE"
+	 upd-action="NO ACTION" del-action="CASCADE" ref-table="public.residue" table="public.dhlen">
+	<columns names="res_key" ref-type="src-columns"/>
+	<columns names="res_key" ref-type="dst-columns"/>
+</constraint>
+
+<constraint name="dhc_fk_rk" type="fk-constr" comparison-type="MATCH SIMPLE"
+	 upd-action="NO ACTION" del-action="CASCADE" ref-table="public.residue" table="public.dhchirality">
+	<columns names="res_key" ref-type="src-columns"/>
+	<columns names="res_key" ref-type="dst-columns"/>
+</constraint>
+
+<constraint name="hl_fk_rk" type="fk-constr" comparison-type="MATCH SIMPLE"
+	 upd-action="NO ACTION" del-action="CASCADE" ref-table="public.residue" table="public.hlen">
+	<columns names="res_key" ref-type="src-columns"/>
+	<columns names="res_key" ref-type="dst-columns"/>
+</constraint>
+
+<constraint name="eagn_fk_rk" type="fk-constr" comparison-type="MATCH SIMPLE"
+	 upd-action="NO ACTION" del-action="CASCADE" ref-table="public.residue" table="public.eagn">
+	<columns names="res_key" ref-type="src-columns"/>
+	<columns names="res_key" ref-type="dst-columns"/>
+</constraint>
+
+<constraint name="eagn_fk_gref" type="fk-constr" comparison-type="MATCH SIMPLE"
+	 upd-action="NO ACTION" del-action="NO ACTION" ref-table="public.grid" table="public.eagn">
+	<columns names="grid_ref" ref-type="src-columns"/>
+	<columns names="grid_ref" ref-type="dst-columns"/>
+</constraint>
+
+<constraint name="dhc_fk_rk" type="fk-constr" comparison-type="MATCH SIMPLE"
+	 upd-action="NO ACTION" del-action="CASCADE" ref-table="public.residue" table="public.dhcoords">
+	<columns names="res_key" ref-type="src-columns"/>
+	<columns names="res_key" ref-type="dst-columns"/>
+</constraint>
+
+<constraint name="fk_grid_point_gp_key" type="fk-constr" comparison-type="MATCH SIMPLE"
+	 upd-action="NO ACTION" del-action="NO ACTION" ref-table="public.grid_point" table="public.grid_point_counts">
+	<columns names="gp_key" ref-type="src-columns"/>
+	<columns names="gp_key" ref-type="dst-columns"/>
+</constraint>
+
+<constraint name="fk_grid_point_gp_key_cp" type="fk-constr" comparison-type="MATCH SIMPLE"
+	 upd-action="NO ACTION" del-action="NO ACTION" ref-table="public.grid" table="public.grid_atom_counts">
+	<columns names="grid_ref" ref-type="src-columns"/>
+	<columns names="grid_ref" ref-type="dst-columns"/>
+</constraint>
+
+<constraint name="fk_grid_point_nlp_gp_key_cp" type="fk-constr" comparison-type="MATCH SIMPLE"
+	 upd-action="NO ACTION" del-action="NO ACTION" ref-table="public.grid_point" table="public.grid_point_nlp">
+	<columns names="gp_key" ref-type="src-columns"/>
+	<columns names="gp_key" ref-type="dst-columns"/>
+</constraint>
+
+<relationship name="rel_chain_pdb" type="relfk" layers="0"
+	 src-table="public.chain"
+	 dst-table="public.pdb" reference-fk="fk_pdb_key"
+	 src-required="false" dst-required="true"/>
+
+<relationship name="rel_atom_residue" type="relfk" layers="0"
+	 src-table="public.atom"
+	 dst-table="public.residue" reference-fk="fk_residue_key"
+	 src-required="false" dst-required="true"/>
+
+<relationship name="rel_atom_atom_covalent_radii" type="relfk" layers="0"
+	 src-table="public.atom"
+	 dst-table="public.atom_covalent_radii" reference-fk="fk_acr_key"
+	 src-required="false" dst-required="false"/>
+
+<relationship name="rel_hedron_residue" type="relfk" layers="0"
+	 src-table="public.hedron"
+	 dst-table="public.residue" reference-fk="fk_residue_key"
+	 src-required="false" dst-required="false"/>
+
+<relationship name="rel_hedron_atom" type="relfk" layers="0"
+	 src-table="public.hedron"
+	 dst-table="public.atom" reference-fk="fk_ak1"
+	 src-required="false" dst-required="true"/>
+
+<relationship name="rel_hedron_atom1" type="relfk" layers="0"
+	 src-table="public.hedron"
+	 dst-table="public.atom" reference-fk="fk_ak2"
+	 src-required="false" dst-required="true"/>
+
+<relationship name="rel_hedron_atom2" type="relfk" layers="0"
+	 src-table="public.hedron"
+	 dst-table="public.atom" reference-fk="fk_ak3"
+	 src-required="false" dst-required="true"/>
+
+<relationship name="rel_hedron_hedron_class" type="relfk" layers="0"
+	 src-table="public.hedron"
+	 dst-table="public.hedron_class" reference-fk="fk_hc_key"
+	 src-required="false" dst-required="false"/>
+
+<relationship name="rel_hedron_hedron_residue_class" type="relfk" layers="0"
+	 src-table="public.hedron"
+	 dst-table="public.hedron_residue_class" reference-fk="fk_hrc_key"
+	 src-required="false" dst-required="false"/>
+
+<relationship name="rel_hedron_hedron_cr_class" type="relfk" layers="0"
+	 src-table="public.hedron"
+	 dst-table="public.hedron_cr_class" reference-fk="fk_hcrc_key"
+	 src-required="false" dst-required="false"/>
+
+<relationship name="rel_residue_chain" type="relfk" layers="0"
+	 src-table="public.residue"
+	 dst-table="public.chain" reference-fk="fk_chain_key"
+	 src-required="false" dst-required="true"/>
+
+<relationship name="rel_dihedron_residue" type="relfk" layers="0"
+	 src-table="public.dihedron"
+	 dst-table="public.residue" reference-fk="fk_residue_key"
+	 src-required="false" dst-required="false"/>
+
+<relationship name="rel_dihedron_hedron" type="relfk" layers="0"
+	 src-table="public.dihedron"
+	 dst-table="public.hedron" reference-fk="fk_hk1"
+	 src-required="false" dst-required="false"/>
+
+<relationship name="rel_dihedron_hedron1" type="relfk" layers="0"
+	 src-table="public.dihedron"
+	 dst-table="public.hedron" reference-fk="fk_hk2"
+	 src-required="false" dst-required="false"/>
+
+<relationship name="rel_dihedron_dihedron_class" type="relfk" layers="0"
+	 src-table="public.dihedron"
+	 dst-table="public.dihedron_class" reference-fk="fk_dc_key"
+	 src-required="false" dst-required="false"/>
+
+<relationship name="rel_dihedron_dihedron_residue_class" type="relfk" layers="0"
+	 src-table="public.dihedron"
+	 dst-table="public.dihedron_residue_class" reference-fk="fk_drc_key"
+	 src-required="false" dst-required="false"/>
+
+<relationship name="rel_dihedron_dihedron_cr_class" type="relfk" layers="0"
+	 src-table="public.dihedron"
+	 dst-table="public.dihedron_cr_class" reference-fk="fk_dcrc_key"
+	 src-required="false" dst-required="false"/>
+
+<relationship name="rel_env_atoms_residue" type="relfk" layers="0"
+	 src-table="public.env_atoms"
+	 dst-table="public.residue" reference-fk="fk_ca_res"
+	 src-required="false" dst-required="false"/>
+
+<relationship name="rel_env_atoms_atom" type="relfk" layers="0"
+	 src-table="public.env_atoms"
+	 dst-table="public.atom" reference-fk="fk_env_atom"
+	 src-required="false" dst-required="true"/>
+
+<relationship name="rel_atom_covalent_radii_pairs_atom_covalent_radii" type="relfk" layers="0"
+	 src-table="public.acr_pairs"
+	 dst-table="public.atom_covalent_radii" reference-fk="fk_acr1"
+	 src-required="false" dst-required="false"/>
+
+<relationship name="rel_atom_covalent_radii_pairs_atom_covalent_radii1" type="relfk" layers="0"
+	 src-table="public.acr_pairs"
+	 dst-table="public.atom_covalent_radii" reference-fk="fk_acr2"
+	 src-required="false" dst-required="false"/>
+
+<relationship name="rel_non_bond_dists_chain" type="relfk" layers="0"
+	 src-table="public.non_bond_dists"
+	 dst-table="public.chain" reference-fk="fk_chain_key"
+	 src-required="false" dst-required="false"/>
+
+<relationship name="rel_non_bond_dists_atom_covalent_radii_pairs" type="relfk" layers="0"
+	 src-table="public.non_bond_dists"
+	 dst-table="public.acr_pairs" reference-fk="fk_acrp_key"
+	 src-required="false" dst-required="false"/>
+
+<relationship name="rel_env_atoms_atom1" type="relfk" layers="0"
+	 src-table="public.env_atoms"
+	 dst-table="public.atom" reference-fk="fk_minp"
+	 src-required="false" dst-required="false"/>
+
+<relationship name="rel_env_atoms_atom2" type="relfk" layers="0"
+	 src-table="public.env_atoms"
+	 dst-table="public.atom" reference-fk="fk_maxp"
+	 src-required="false" dst-required="false"/>
+
+<relationship name="rel_grid_point_grid" type="relfk" layers="0"
+	 src-table="public.grid_point"
+	 dst-table="public.grid" reference-fk="fk_grid"
+	 src-required="false" dst-required="false"/>
+
+<relationship name="rel_ea_grid_grid_point" type="relfk" layers="0"
+	 src-table="public.ea_grid"
+	 dst-table="public.grid_point" reference-fk="fk_grid_point"
+	 src-required="false" dst-required="true"/>
+
+<relationship name="rel_ea_grid_env_atoms" type="relfk" layers="0"
+	 src-table="public.ea_grid"
+	 dst-table="public.env_atoms" reference-fk="fk_ea_key"
+	 src-required="false" dst-required="true"/>
+
+<relationship name="rel_ea_grid_grid" type="relfk" layers="0"
+	 src-table="public.ea_grid"
+	 dst-table="public.grid" reference-fk="fk_grid_ref"
+	 src-required="false" dst-required="false"/>
+
+<relationship name="&quot;rel_dhLen_residue&quot;" type="relfk" layers="0"
+	 src-table="public.dhlen"
+	 dst-table="public.residue" reference-fk="dhl_fk_rk"
+	 src-required="false" dst-required="true"/>
+
+<relationship name="&quot;rel_dhLen_cp_residue&quot;" type="relfk" layers="0"
+	 src-table="public.dhchirality"
+	 dst-table="public.residue" reference-fk="dhc_fk_rk"
+	 src-required="false" dst-required="true"/>
+
+<relationship name="&quot;rel_dhLen_cp_residue1&quot;" type="relfk" layers="0"
+	 src-table="public.hlen"
+	 dst-table="public.residue" reference-fk="hl_fk_rk"
+	 src-required="false" dst-required="true"/>
+
+<relationship name="rel_eagn_residue" type="relfk" layers="0"
+	 src-table="public.eagn"
+	 dst-table="public.residue" reference-fk="eagn_fk_rk"
+	 src-required="false" dst-required="true"/>
+
+<relationship name="rel_eagn_grid" type="relfk" layers="0"
+	 src-table="public.eagn"
+	 dst-table="public.grid" reference-fk="eagn_fk_gref"
+	 src-required="false" dst-required="true"/>
+
+<relationship name="rel_dhlen_cp_residue" type="relfk" layers="0"
+	 src-table="public.dhcoords"
+	 dst-table="public.residue" reference-fk="dhc_fk_rk"
+	 src-required="false" dst-required="true"/>
+
+<relationship name="rel_grid_point_counts_grid_point" type="relfk" layers="0"
+	 src-table="public.grid_point_counts"
+	 dst-table="public.grid_point" reference-fk="fk_grid_point_gp_key"
+	 src-required="false" dst-required="true"/>
+
+<relationship name="rel_grid_point_counts_cp_grid" type="relfk" layers="0"
+	 src-table="public.grid_atom_counts"
+	 dst-table="public.grid" reference-fk="fk_grid_point_gp_key_cp"
+	 src-required="false" dst-required="true"/>
+
+<relationship name="rel_grid_point_counts_cp_grid_point" type="relfk" layers="0"
+	 src-table="public.grid_point_nlp"
+	 dst-table="public.grid_point" reference-fk="fk_grid_point_nlp_gp_key_cp"
+	 src-required="false" dst-required="true"/>
+
+<permission>
+	<object name="public" type="schema"/>
+	<roles names="postgres"/>
+	<privileges create="true" usage="true"/>
+</permission>
+<permission>
+	<object name="public" type="schema"/>
+	<privileges create="true" usage="true"/>
+</permission>
+</dbmodel>
