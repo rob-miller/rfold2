@@ -328,6 +328,35 @@ class gridProt:
             rowNdx += 1
         return distribArr
 
+    def getGPnlp(self, points, step):
+        conn = openDb()
+        cur = conn.cursor()
+        nlp = {
+            rc: xp.full([points[rc], len(self.crNdx)], 100.0, dtype=float)
+            for rc in points.keys()
+        }
+        crStr = ""
+        started = False
+        for cr in self.crNdx.keys():
+            if started:
+                crStr += ", "
+            crStr += f"gpn.{cr.lower()}"
+            started = True
+        for rc in "XGAVLIMFPSTCNQYWDEHKR":
+            gref = pqry1(
+                cur,
+                f"select grid_ref from grid where res_char = '{rc}' and step = {step}",
+            )
+            pqry(
+                cur,
+                f"select gp.index, {crStr} from grid_point gp, grid_point_nlp gpn where grid_ref = {gref} and gp.gp_key = gpn.gp_key",
+            )
+            rslt = cur.fetchall()
+            for r in rslt:
+                nlp[rc][r[0]] = r[1:]
+
+        return nlp
+
     def getGridDef(self, step):
         conn = openDb()
         cur = conn.cursor()
