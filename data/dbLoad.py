@@ -105,6 +105,10 @@ def parseArgs():
         "-p", dest="PROCESSES", help=f"number of subprocesses, default {PROCESSES}"
     )
 
+    arg_parser.add_argument(
+        "-sd", help="std dev pass (after chain load)", action="store_true"
+    )
+
     args = arg_parser.parse_args()
 
     if args.skip_count:
@@ -307,7 +311,7 @@ class dbLoad:
                     nbdDict[self.acrp[i][j]]["max"] = [0] * self.nbdReport
                     nbdDict[self.acrp[i][j]]["sum"] = [0] * self.nbdReport
                     nbdDict[self.acrp[i][j]]["count"] = [0] * self.nbdReport
-
+        envCoords = {}
         for ric in cic.ordered_aa_ic_list:
             # global minEnvAtomCount
             envAtoms = {}
@@ -318,7 +322,6 @@ class dbLoad:
             envAtomMaxP = {}
             resKey = None
             prevSet = set()
-            envCoords = {}
             if 0 < len(ric.rprev):
                 for r in ric.rprev:
                     prevSet.update(r.ak_set)
@@ -412,41 +415,42 @@ class dbLoad:
                     if envCount > self.envAtomsMax:
                         break
 
-                if not self.sdPass:
-                    psiO = ric.pick_angle("N:CA:C:O")
-                    if psiO is None:
-                        continue
-                    if len(envAtoms) == 0:
-                        continue
-                    cst = np.transpose(psiO.cst)
-                    # rtm here we reject env-atoms if not in env of at least 2 center-atoms:
-                    asel = np.array(
-                        sorted(
-                            [
-                                eai
-                                for eai in envAtoms
-                                if envAtomCounts[eai] >= self.minEnvAtomCount
-                            ]
-                        )
+            if not self.sdPass:
+                psiO = ric.pick_angle("N:CA:C:O")
+                if psiO is None:
+                    continue
+                if len(envAtoms) == 0:
+                    continue
+                cst = np.transpose(psiO.cst)
+                # rtm here we reject env-atoms if not in env of at least 2 center-atoms:
+                asel = np.array(
+                    sorted(
+                        [
+                            eai
+                            for eai in envAtoms
+                            if envAtomCounts[eai] >= self.minEnvAtomCount
+                        ]
                     )
-                    transformed = aa[asel].dot(cst)
-                    if akDict is not None:
-                        i = 0
-                        for ndx in asel:
-                            # print(envAtoms[ndx], transformed[i])
-                            aKey = akDict[envAtoms[ndx]][0]
-                            minp = akDict[envAtomMinP[ndx]][0]
-                            maxp = akDict[envAtomMaxP[ndx]][0]
-                            t = transformed[i]
-                            self.dlq(
-                                "insert into env_atoms (res_key, env_atom, x, y, z, min, min_partner, max, max_partner)"
-                                f" values ({resKey}, {aKey}, {t[0]}, {t[1]}, {t[2]}, {envAtomMin[ndx]}, {minp}, {envAtomMax[ndx]}, {maxp})"
-                                # " on conflict do nothing",
-                            )
-                            i += 1
-                    else:
-                        # log transformed env atoms for efn
-                        envCoords[ric] = transformed
+                )
+                transformed = aa[asel].dot(cst)
+                if akDict is not None:
+                    i = 0
+                    for ndx in asel:
+                        # print(envAtoms[ndx], transformed[i])
+                        aKey = akDict[envAtoms[ndx]][0]
+                        minp = akDict[envAtomMinP[ndx]][0]
+                        maxp = akDict[envAtomMaxP[ndx]][0]
+                        t = transformed[i]
+                        self.dlq(
+                            "insert into env_atoms (res_key, env_atom, x, y, z, min, min_partner, max, max_partner)"
+                            f" values ({resKey}, {aKey}, {t[0]}, {t[1]}, {t[2]}, {envAtomMin[ndx]}, {minp}, {envAtomMax[ndx]}, {maxp})"
+                            # " on conflict do nothing",
+                        )
+                        i += 1
+                else:
+                    # log transformed env atoms for efn
+                    crList = [envAtoms[eai].cr_class() for eai in asel]
+                    envCoords[ric] = (crList, transformed)
 
         if akDict is not None:
             for acrpk in nbdDict:
