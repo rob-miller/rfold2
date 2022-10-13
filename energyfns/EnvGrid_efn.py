@@ -5,6 +5,9 @@ from data.gridExplore import gridProt
 from data.dbLoad import dbLoad
 from Bio.PDB.Chain import Chain
 
+import numpy as xp
+import math
+
 # from utils.rdb import openDb, pqry, pqry1
 
 
@@ -18,7 +21,13 @@ class EnvGridEfn(BaseEfn):
         self.step = float(configuration["grid_resolution"])
         self.grids, self.points = self.gp.getGrids(self.step)
         self.dbl = dbLoad()
-        print("hello")
+        self.maxd = math.sqrt(
+            3 * (self.step * self.step)
+        )  # diagonal between 2 grid points
+        self.smArr = [n for n in range(self.gp.search_multi)]  # used by argpartition
+        self.nlp = self.gp.getGPnlp(self.points, self.step)
+
+        # print("hello")
 
     def evaluate(self, chain):
         """Return global (avg) energy and array of energy per residue"""
@@ -36,6 +45,34 @@ class EnvGridEfn(BaseEfn):
 
         coordDict = self.dbl.loadResidueEnvirons(cic, distPlot)
 
-        resArr = []
+        resArr = xp.zeros([len(cic.ordered_aa_ic_list)], dtype=float)
+        ndx = 0
+        for ric in cic.ordered_aa_ic_list:
+            crArr, locArr0 = coordDict[ric]
+            locArr = xp.array([la[0:3] for la in locArr0])
+            # distArrX = xp.linalg.norm(
+            #    locArr[:, None, :] - self.grids["X"][None, :, :], axis=-1
+            # )
+            distArrR = xp.linalg.norm(
+                locArr[:, None, :] - self.grids[ric.lc][None, :, :], axis=-1
+            )
+            # sortedX = xp.argpartition(distArrX, self.smArr)
+            sortedR = xp.argpartition(distArrR, self.smArr)
 
-        return 0, []
+            # distribArrX += self.distributeGridPoints(
+            #    crArr, distArrX, self.maxd, sortedX
+            # )
+            distribArrRC = self.gp.distributeGridPoints(
+                crArr, distArrR, self.maxd, sortedR
+            )
+
+            # avg energy per contact
+            # local env * neg-log-prob array, divide by local env contacts to reward contacts/compactness over fewer contacts
+            resArr[ndx] = xp.sum(distribArrRC * self.nlp[ric.lc]) / xp.count_nonzero(
+                distribArrRC
+            )
+            ndx += 1
+
+        globAvg = xp.sum(resArr) / len(resArr)
+
+        return globAvg, resArr
