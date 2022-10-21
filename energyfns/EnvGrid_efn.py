@@ -12,7 +12,7 @@ import math
 
 
 class EnvGridEfn(BaseEfn):
-    """This class is an abstract base class (ABC) for efns."""
+    """Energy function based on membership in 3d grid of environment atoms."""
 
     def __init__(self, configuration):
         """Initialize the class; save the configuration in the class."""
