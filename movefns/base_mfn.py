@@ -1,11 +1,11 @@
-"""This module implements an abstract base class (ABC) 'BaseMfn' for mfns. Also
-    includes some transformation functions.
+"""This module implements an abstract base class (ABC) 'BaseMfn' for mfns (move
+protein functions).
 """
 from abc import ABC  # , abstractmethod
 
 
 class BaseMfn(ABC):
-    """This class is an abstract base class (ABC) for mfns."""
+    """This class is an abstract base class (ABC) for mfns (move functions)."""
 
     def __init__(self, configuration):
         """Initialize the class; save the configuration in the class."""
@@ -16,7 +16,7 @@ class BaseMfn(ABC):
     #    """Return the total number of images in the mfn."""
     #    return 0
 
-    def evaluate(self, chain):
+    def step(self, chain):
         """Return next conformation of chain"""
         return chain
 

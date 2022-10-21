@@ -274,6 +274,8 @@ class gridProt:
         closest = xp.argmin(distArr, axis=1)  # get minimum dist over each row
         sorted = None  # might not need to sort so do later
         count = self.search_multi  # number of tries to find no conflicts
+        if not hasattr(self, "smArr"):
+            self.smArr = [n for n in range(self.search_multi)]  # used by argpartition
         while count > 0 or sorted is None:
             assignments = {}
             noConflict = True

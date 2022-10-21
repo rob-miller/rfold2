@@ -13,7 +13,7 @@ def find_mfn_using_name(mfn_name):
     be instantiated. It has to be a subclass of BaseMfn,
     and it is case-insensitive.
     """
-    mfn_filename = "energyfns." + mfn_name + "_mfn"
+    mfn_filename = "movefns." + mfn_name + "_mfn"
     mfnlib = importlib.import_module(mfn_filename)
 
     mfn = None
