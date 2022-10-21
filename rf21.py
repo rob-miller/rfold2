@@ -16,6 +16,7 @@ from torchinfo import summary
 from datasets import get_dataset
 
 from energyfns import get_efn
+from movefns import get_mfn
 
 # import os
 
@@ -219,9 +220,11 @@ if __name__ == "__main__":
     # if config["nn"]["netconfig"]:
     #    nn = getNN(config)
 
-    environE = get_efn(config["energyfn"]["environ"])
+    environE = get_efn(config["energyfn"])
 
     targGlobalE, targSeqE = environE.evaluate(pdb_structure)
     predGlobalE, predSeqE = environE.evaluate(pdb_structure2)
 
+    moveFn = get_mfn(config["movefn"])
+    moveFn.move(pdb_structure)
     print("hello")
