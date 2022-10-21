@@ -52,9 +52,13 @@ class aa0Dataset(BaseDataset):
 
         # grid needed as dict because grid_point data is only used voxels, not all voxels
         self.gridDict = {
-            gp[0]: [gp[1], gp[2], gp[3]] + NoAtom for gp in self.cur.fetchall()
+            # gp[0]: [gp[1], gp[2], gp[3]] + NoAtom for gp in self.cur.fetchall()
+            # replace with normalized values because eagn is normalized by 'dbmng.py -gni'
+            gp[0]: [0.0, 0.0, 0.0] + NoAtom for gp in self.cur.fetchall()
         }
 
+        """
+        ## normalization code looks like:
         # prepare grid normalisation parameters
         self.gridMinArr = (
             torch.tensor(
@@ -62,6 +66,11 @@ class aa0Dataset(BaseDataset):
             )
             - gridRes
         )
+
+        gridArr = np.array([gp for gp in gridDictCopy.values()], dtype=np.float32)
+        # normalise coords to -1/+1 - so all unpopulated grid points go to 0,0,0 atom type 0
+        gridArr[:, 0:3] = (2 * ((gridArr[:, 0:3] - gridMinArr) / (2 * gridStep))) - 1
+        """
 
         # prepare output data
         # create dict of rc : len(di/hedra) to filter missing atoms in data
@@ -112,7 +121,7 @@ class aa0Dataset(BaseDataset):
         rk = rkc[0]
         rc = rkc[1]
 
-        # get environments for input
+        # get normalized environments for input (ran dbmng.py -gni)
         self.curj.execute(
             f"select jdict from eagn where res_key = {rk} and grid_ref = {self.gref}"
         )
