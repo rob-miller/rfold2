@@ -1,0 +1,18 @@
+{
+    "target": {
+        "protein": "1crn"
+    },
+    "energyfn": {
+        "name": "EnvGrid",
+        "grid_resolution": "3.0",
+        "hydrogens": false
+    },
+    "movefn": {
+        "name": "NNOnly",
+        "netconfig": "config_aa0.json",
+        "grid_resolution": "3.0",
+        "hydrogens": false,
+        "res_char": "X"
+    },
+    "foldopts": {}
+}
