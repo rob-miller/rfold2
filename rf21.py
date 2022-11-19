@@ -13,7 +13,6 @@ import gzip
 from utils import parse_configuration
 from models import get_model, checkpoint_load
 from torchinfo import summary
-from datasets import get_dataset
 
 from energyfns import get_efn
 from movefns import get_mfn
@@ -148,43 +147,6 @@ def parseArgs():
     #    sdPass = True
 
 
-def getNN(configDict):
-    global args
-    print(f"Reading config file {configDict['nn']['netconfig']}...")
-    config = parse_configuration(configDict["nn"]["netconfig"])
-
-    if "cuda" in configDict["nn"]:
-        config["process"]["device"] = f"cuda:{configDict['nn']['cuda']}"
-    if args.cuda:
-        config["process"]["device"] = f"cuda:{args.cuda}"
-    if "cpu" in configDict["nn"] and configDict["nn"]["cpu"]:
-        config["process"]["device"] = "cpu"
-    if args.cpu:
-        config["process"]["device"] = "cpu"
-
-    print(f"device: {config['process']['device']}")
-    full_dataset = get_dataset(config["dataset"])  # need for in, out dims
-    if hasattr(full_dataset, "inputDim"):
-        config["model"]["input_dim"] = full_dataset.inputDim
-        config["model"]["output_dim"] = full_dataset.outputDim
-
-    print(f"input dimension {config['model']['input_dim']}")
-    print(f"output dimension {config['model']['output_dim']}")
-
-    print("Initializing model...")
-    model = get_model(config["model"]).to(config["process"]["device"])
-
-    summary(model)
-    epochs = config["process"]["epochs"]
-    load_epoch = 0
-    if config["checkpoint"]["load"] != -1:  # can use "last" instead of number
-        if checkpoint_load(model, config):
-            load_epoch = config["checkpoint"]["load"]
-            print(f"re-loaded model from epoch {load_epoch}...")
-            epochs += load_epoch
-    return model
-
-
 if __name__ == "__main__":
     parseArgs()
     if not args.configFile:
@@ -225,6 +187,7 @@ if __name__ == "__main__":
     targGlobalE, targSeqE = environE.evaluate(pdb_structure)
     predGlobalE, predSeqE = environE.evaluate(pdb_structure2)
 
+    config["movefn"]["args"] = args  # so can pass cpu/cuda override
     moveFn = get_mfn(config["movefn"])
     moveFn.move(pdb_structure)
     print("hello")
