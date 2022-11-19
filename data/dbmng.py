@@ -451,6 +451,7 @@ def getNorms():
 
 
 def gnoLengths(rklist):
+    """populates dhlen table with normalized di/hedron interatom distances and chiralities"""
     global minLenList, rangeList, minLen14, rangeLen14, hMinLenArr, hRangeArr
 
     conn = openDb()
@@ -480,7 +481,7 @@ def gnoLengths(rklist):
         else:
             dhlist = [rangeLen14 / 2, 0]  # null state with chirality = 0
 
-        # get this residue all dihedral angles except
+        # get this residue all dihedral angles except phi, omg (use rprev above)
         pqry(
             cur,
             f"select len14, chirality from dihedron where res_key = {rk}"
@@ -557,6 +558,8 @@ def gnoLengths(rklist):
 
 
 def gnoCoords(target):
+    """populates dhcoords table of atom coords for each dihedron"""
+
     def gnoc_loadResidues(cur, cic, chain_key):
         dcDict = get_dcDict(cur)
         for ric in cic.ordered_aa_ic_list:
@@ -863,7 +866,7 @@ def gridNlp():
         gpcr = [g[1] for g in gpc]
         gpc2 = [g[2::] for g in gpc]
         gpca = np.array(gpc2, dtype=np.float64)
-        with np.errstate(divide='ignore', invalid='ignore'):
+        with np.errstate(divide="ignore", invalid="ignore"):
             rslt = -np.log(gpca / gac)
         rslt[np.isnan(rslt)] = 100
         rslt[np.isinf(rslt)] = 100
@@ -1085,7 +1088,7 @@ if __name__ == "__main__":
                 # sys.exit(0)
                 break
             args.limit_count -= 1
-        targList.append(target)
+        targList.append(target.upper())
         fileNo += 1
 
     if args.delete:
