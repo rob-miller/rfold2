@@ -4,8 +4,20 @@ from .base_mfn import BaseMfn
 from data.gridExplore import gridProt
 from data.dbLoad import dbLoad
 from utils.rdb import openDb, pqry, pqry1, pqry1p
-from utils.rpdb import crMapH, crMapNoH, NoAtomCR, MaxHedron, MaxDihedron
+from utils.rpdb import (
+    resList,
+    crMapH,
+    crMapNoH,
+    NoAtomCR,
+    resMap,
+    MaxHedron,
+    MaxDihedron,
+)
 from Bio.PDB.Chain import Chain
+from datasets import get_dataset
+from utils import parse_configuration
+from models import get_model, checkpoint_load
+from torchinfo import summary
 
 from psycopg2.extras import DictCursor
 import torch
@@ -67,7 +79,9 @@ class NNOnlyMfn(BaseMfn):
 
         # prepare grid normalisation parameters
         self.gridMinArr = (
-            torch.tensor([gp[0:3] for gp in self.gridDict.values()], dtype=torch.float32)
+            torch.tensor(
+                [gp[0:3] for gp in self.gridDict.values()], dtype=torch.float32
+            )
             # xp.array([gp[0:3] for gp in self.gridDict.values()], dtype=xp.float32)
             - self.step
         )
@@ -75,7 +89,87 @@ class NNOnlyMfn(BaseMfn):
         pqry(self.cur, "select cr_class, acr_key from atom_covalent_radii;")
         self.acr = {k: v for (k, v) in self.cur.fetchall()}
 
+        self.model = self.getNN(configuration)
+        self.getResAngleMap()
+        self.getNormFactors()
         # print("hello")
+
+    def getNN(self, configDict):
+        args = configDict["args"]
+        print(f"Reading config file {configDict['netconfig']}...")
+        config = parse_configuration(configDict["netconfig"])
+
+        if "cuda" in configDict:
+            config["process"]["device"] = f"cuda:{configDict['cuda']}"
+        if args.cuda:
+            config["process"]["device"] = f"cuda:{args.cuda}"
+        if "cpu" in configDict and configDict["cpu"]:
+            config["process"]["device"] = "cpu"
+        if args.cpu:
+            config["process"]["device"] = "cpu"
+
+        print(f"device: {config['process']['device']}")
+        full_dataset = get_dataset(config["dataset"])  # need for in, out dims
+        if hasattr(full_dataset, "inputDim"):
+            config["model"]["input_dim"] = full_dataset.inputDim
+            config["model"]["output_dim"] = full_dataset.outputDim
+
+        print(f"input dimension {config['model']['input_dim']}")
+        print(f"output dimension {config['model']['output_dim']}")
+
+        print("Initializing model...")
+        model = get_model(config["model"]).to(config["process"]["device"])
+
+        summary(model)
+        epochs = config["process"]["epochs"]
+        load_epoch = 0
+        if config["checkpoint"]["load"] != -1:  # can use "last" instead of number
+            if checkpoint_load(model, config):
+                load_epoch = config["checkpoint"]["load"]
+                print(f"re-loaded model from epoch {load_epoch}...")
+                epochs += load_epoch
+        self.nnconfig = config
+        return model
+
+    def getResAngleMap(self):
+        self.dihedraMap = {}
+        self.hedraMap = {}
+        for resChar in resList:
+            rk = pqry1(
+                self.cur,
+                f"select res_key from residue where res_char = '{resChar}' limit 1",
+            )
+            pqry(
+                self.cur,
+                "select dc.d_class from dihedron d, dihedron_class dc"
+                f" where d.res_key = {rk} and d.class_key = dc.dc_key"
+                " order by dc.d_class",
+            )
+            self.dihedraMap[resChar] = [x[0] for x in self.cur.fetchall()]
+            pqry(
+                self.cur,
+                "select hc.h_class from hedron h, hedron_class hc"
+                f" where h.res_key = {rk} and h.class_key = hc.hc_key"
+                " order by hc.h_class",
+            )
+            self.hedraMap[resChar] = [x[0] for x in self.cur.fetchall()]
+
+    def getNormFactors(self):
+        normFactors = {}
+        for leng in ("len12", "len23", "len13", "len14"):
+            pqry(
+                self.cur,
+                f"select min, range from len_normalization where name = '{leng}'",
+            )
+            normFactors[leng] = self.cur.fetchall()[0]
+
+        self.hMinLenArr = xp.array(
+            [normFactors[lx][0] for lx in ("len12", "len23", "len13")]
+        )
+        self.hRangeArr = xp.array(
+            [normFactors[lx][1] for lx in ("len12", "len23", "len13")]
+        )
+        (self.dhMinLen, self.dhRange) = normFactors["len14"]
 
     def move(self, chain):
         """Return next chain conformation"""
@@ -121,7 +215,7 @@ class NNOnlyMfn(BaseMfn):
 
             # make numpy array (used voxels over all db, with changes for this residue)
             gridArr2 = torch.tensor([gp for gp in gdc2.values()], dtype=torch.float32)
-            # gridArr2 = xp.array([gp for gp in gdc2.values()], dtype=xp.float32)
+            gridArr2np = xp.array([gp for gp in gdc2.values()], dtype=xp.float32)
             """
 
             crArr, locArr0 = coordDict[ric]
@@ -151,6 +245,38 @@ class NNOnlyMfn(BaseMfn):
             # testing code
             assert (torch.all(torch.eq(gridArr, gridArr2)))
             """
+
+            if not self.nnconfig["dataset"]["learnXres"]:
+                inputArr = torch.cat(
+                    (
+                        gridArr.flatten(),
+                        torch.tensor(resMap[ric.lc], dtype=torch.float32),
+                    )
+                )
+            else:
+                inputArr = gridArr.flatten()
+
+            pred = self.model(inputArr).cpu().detach().numpy()
+            dhLenArr, dhChrArr, hArr = (
+                pred[0:MaxDihedron],
+                pred[MaxDihedron : 2 * MaxDihedron],
+                pred[2 * MaxDihedron : 2 * MaxDihedron + MaxHedron],
+            )
+
+            # truncate NN output for specific residue
+            dhLenArr = dhLenArr[0 : len(self.dihedraMap[ric.lc])]
+            dhChrArr = dhLenArr[0 : len(self.dihedraMap[ric.lc])]
+            hArr = xp.reshape(hArr[0 : len(self.hedraMap[ric.lc])], (-1, 3))
+
+            # denormalize from dbmng.py:gnoLengths() code:
+            # "normalise dihedra len to -1/+1"
+            dhLenArr = (((dhLenArr + 1) / 2) * self.dhRange) + self.dhMinLen
+            # "normalise hedra len to -1/+1"
+            hArr = (((hArr + 1) / 2) * self.hRangeArr) + self.hMinLenArr
+
+            dhChrArr[dhChrArr < 0] = -1
+            dhChrArr[dhChrArr >= 0] = 1
+
             print("hello")
 
             # for gNdx in ea_grid:
