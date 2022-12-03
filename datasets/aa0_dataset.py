@@ -86,7 +86,8 @@ class aa0Dataset(BaseDataset):
             self.resChar = "X"
             pqry(
                 self.cur,
-                f"select res_key, res_char from residue where std_all_angles{lim}",
+                "select res_key, res_char from residue where std_all_angles"
+                f" order by res_key{lim}",
             )
         else:
             self.resChar = None
@@ -120,7 +121,9 @@ class aa0Dataset(BaseDataset):
         rkc = self.rkclist[idx]
         rk = rkc[0]
         rc = rkc[1]
+        return self.getRkInOut(rk, rc)
 
+    def getRkInOut(self, rk, rc):
         # get normalized environments for input (ran dbmng.py -gni)
         self.curj.execute(
             f"select jdict from eagn where res_key = {rk} and grid_ref = {self.gref}"
