@@ -213,7 +213,7 @@ CAUTION: Do not modify this file unless you know what you are doing.
 <table name="hedron_class" layers="0" collapse-mode="2" max-obj-count="2" z-value="0">
 	<schema name="public"/>
 	<role name="rfold"/>
-	<position x="2320" y="1060"/>
+	<position x="2320" y="1040"/>
 	<column name="hc_key" not-null="true" sequence="public.hc_seq">
 		<type name="integer" length="0"/>
 	</column>
@@ -402,7 +402,7 @@ CAUTION: Do not modify this file unless you know what you are doing.
 <table name="dihedron_class" layers="0" collapse-mode="2" max-obj-count="2" z-value="0">
 	<schema name="public"/>
 	<role name="rfold"/>
-	<position x="2320" y="640"/>
+	<position x="2320" y="620"/>
 	<column name="dc_key" not-null="true" sequence="public.dc_seq">
 		<type name="integer" length="0"/>
 	</column>
@@ -1045,6 +1045,22 @@ CAUTION: Do not modify this file unless you know what you are doing.
 		<columns names="gp_key" ref-type="src-columns"/>
 	</constraint>
 </table>
+
+<index name="ndx_d_class" table="public.dihedron_class"
+	 concurrent="false" unique="false" fast-update="false" buffering="false"
+	 index-type="btree" factor="0">
+		<idxelement use-sorting="false">
+			<column name="d_class"/>
+		</idxelement>
+</index>
+
+<index name="ndx_h_class" table="public.hedron_class"
+	 concurrent="false" unique="false" fast-update="false" buffering="false"
+	 index-type="btree" factor="0">
+		<idxelement use-sorting="false">
+			<column name="h_class"/>
+		</idxelement>
+</index>
 
 <constraint name="fk_pdb_key" type="fk-constr" comparison-type="MATCH SIMPLE"
 	 upd-action="NO ACTION" del-action="CASCADE" ref-table="public.pdb" table="public.chain">
