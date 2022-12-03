@@ -6,6 +6,8 @@ import glob
 import re
 import os
 
+from collections import OrderedDict
+
 
 def find_model_using_name(model_name):
     """Import the module "models/[model_name]_model.py"."""
@@ -14,7 +16,9 @@ def find_model_using_name(model_name):
     model = None
     target_model_name = model_name.replace("_", "") + "model"
     for name, cls in modellib.__dict__.items():
-        if name.lower() == target_model_name.lower() and issubclass(cls, torch.nn.Module):
+        if name.lower() == target_model_name.lower() and issubclass(
+            cls, torch.nn.Module
+        ):
             model = cls
 
     if model is None:
@@ -45,7 +49,7 @@ def checkpoint_name(epoch, config):
     path = config["checkpoint"]["path"]
     if epoch == "last":
         # https://stackoverflow.com/questions/2225564/get-a-filtered-list-of-files-in-a-directory
-        pat = f"{mname}_{reschar}_{gridRes}_{loss}_{optim}_net_*.pt"
+        pat = f"{mname}_{reschar}_{gridRes}_{loss}_{optim}_net_*.pt*"
         pat_path = os.path.join(path, pat)
         file_list = glob.glob(pat_path)
         # https://stackoverflow.com/questions/43074685/find-file-in-directory-with-the-highest-number-in-the-filename
@@ -57,6 +61,7 @@ def checkpoint_name(epoch, config):
         if not file_list:
             return pat_path
         file_path = max(file_list, key=get_num)
+        file_path = file_path[:-1]  # remove device number
         # print(f"found {file_path}")
         config["checkpoint"]["load"] = get_num(file_path)[0]
     else:
@@ -66,27 +71,35 @@ def checkpoint_name(epoch, config):
 
 
 def checkpoint_save(model, epoch, config):
-    dev = config["process"]["device"]
     save_path = checkpoint_name(epoch, config)
-
-    if dev[1] == "u":  # c[u]da:n or c[p]u
-        torch.save(model.cpu().state_dict(), save_path)
-        model.to(dev)
-    else:
-        torch.save(model.cpu().state_dict(), save_path)
+    for d in range(len(config["model"]["devlist"])):
+        spd = save_path + str(d)
+        dev = config["model"]["devlist"][d]
+        if dev[1] == "u":  # c[u]da:n or c[p]u
+            torch.save(model.netlist[d].cpu().state_dict(), spd)
+            model.netlist[d].to(dev)
+        else:
+            torch.save(model.netlist[d].cpu().state_dict(), spd)
 
 
 def checkpoint_load(model, config):
-    dev = config["process"]["device"]
     epoch = config["checkpoint"]["load"]
     load_path = checkpoint_name(epoch, config)
-
-    if os.path.exists(load_path):
-        state_dict = torch.load(load_path, map_location=dev)
-        model.load_state_dict(state_dict)
-        model.eval()
-        print(f"loaded checkpoint file: {load_path}")
-        return True
-    else:
-        print(f"no checkpoint file found: {load_path}")
-        return False
+    for d in range(len(config["model"]["devlist"])):
+        lpd = load_path + str(d)
+        if not os.path.exists(lpd):
+            print(f"no checkpoint file found: {lpd}")
+            return False
+        dev = config["model"]["devlist"][d]
+        state_dict = torch.load(lpd, map_location=dev)
+        try:
+            model.netlist[d].load_state_dict(state_dict)
+        except RuntimeError:
+            nsd = OrderedDict()
+            for k, v in state_dict.items():
+                nk = k.replace("shortcut_linear_relu_stack.", "")
+                nsd[nk] = v
+            model.netlist[d].load_state_dict(nsd)
+        print(f"loaded checkpoint file: {lpd}")
+    model.eval()
+    return True

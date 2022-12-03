@@ -52,13 +52,18 @@ def get_dataloaders(config):
     return train_dataloader, test_dataloader
 
 
+def getInputOutput(config, inp, outp):
+    dev0 = config["model"]["devlist"][0]
+    devL = config["model"]["devlist"][-1]
+    return inp.to(dev0), outp.to(devL)
+
+
 def train_epoch(dataloader, model, loss_fn, optimizer, writer, epcb, config):
     size = len(dataloader.dataset)
-    dev = config["process"]["device"]
     model.train()
     for batch, (inp, outp) in enumerate(dataloader):
-        inp, outp = inp.to(dev), outp.to(dev)
-
+        # inp, outp = inp.to(dev), outp.to(dev)
+        inp, outp = getInputOutput(config, inp, outp)
         # Compute prediction error
         pred = model(inp)
         loss = loss_fn(pred, outp)
@@ -86,12 +91,11 @@ def train_epoch(dataloader, model, loss_fn, optimizer, writer, epcb, config):
 def test(dataloader, model, loss_fn, writer, epcb, config):
     # size = len(dataloader.dataset)
     num_batches = len(dataloader)
-    dev = config["process"]["device"]
     model.eval()
     test_loss = 0  # , correct = 0, 0
     with torch.no_grad():
         for inp, outp in dataloader:
-            inp, outp = inp.to(dev), outp.to(dev)
+            inp, outp = getInputOutput(config, inp, outp)
             pred = model(inp)
             test_loss += loss_fn(pred, outp).item()
     test_loss /= num_batches
@@ -107,7 +111,7 @@ def train(config_file, export=True):
     config = parse_configuration(config_file)
     train_dataloader, test_dataloader = get_dataloaders(config)
 
-    print(f"device: {config['process']['device']}")
+    print(f"devlist: {config['model']['devlist']}")
     print(f"{len(train_dataloader.dataset)} training samples")
     print(f"{len(test_dataloader.dataset)} test samples")
 
@@ -115,9 +119,13 @@ def train(config_file, export=True):
     print(f"output dimension {config['model']['output_dim']}")
 
     print("Initializing model...")
-    model = get_model(config["model"]).to(config["process"]["device"])
-
+    model = get_model(config["model"])
+    for d in range(len(config["model"]["devlist"])):
+        model.netlist[d].to(config["model"]["devlist"][d])
+        summary(model.netlist[0])
+    print("------")
     summary(model)
+    # summary(model)
     epochs = config["process"]["epochs"]
     load_epoch = 0
     if config["checkpoint"]["load"] != -1:  # can use "last" instead of number

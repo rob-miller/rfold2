@@ -127,11 +127,13 @@ def parseArgs():
         "-nncf", dest="nnConfigFile", help="override NN config file for model"
     )
     arg_parser.add_argument(
-        "-cu", dest="cuda", help="override cuda device in NN config file"
+        "-cu", dest="cudalist", help="list of int: 0,1,2 - override cuda device in NN config file",
+        type=lambda s: [int(item) for item in s.split(',')]
     )
     arg_parser.add_argument("-cpu", help="load NN on cpu not cuda", action="store_true")
     # arg_parser.add_argument("-fcf", dest="foldConfigFile", help="folding process config file")
 
+    arg_parser.add_argument("-fake", help="use db instead of NN", action="store_true")
     args = arg_parser.parse_args()
 
     """
@@ -182,12 +184,16 @@ if __name__ == "__main__":
     # if config["nn"]["netconfig"]:
     #    nn = getNN(config)
 
+    config["movefn"]["args"] = args  # so can pass cpu/cuda override
+    moveFn = get_mfn(config["movefn"])
+
     environE = get_efn(config["energyfn"])
 
     targGlobalE, targSeqE = environE.evaluate(pdb_structure)
     predGlobalE, predSeqE = environE.evaluate(pdb_structure2)
 
-    config["movefn"]["args"] = args  # so can pass cpu/cuda override
-    moveFn = get_mfn(config["movefn"])
-    moveFn.move(pdb_structure)
-    print("hello")
+    print(f"start - targ: {targGlobalE} pred: {predGlobalE}")
+    for i in range(3):
+        globAvg, resArr = moveFn.move(pdb_structure)
+        print(f"targ: {targGlobalE} pred: {globAvg}")
+    print("finished.")

@@ -9,7 +9,7 @@ class rfmseLoss(nn.Module):
         """Initialize the model."""
         super().__init__()
         self.rc = config["dataset"]["res_char"]
-        self.rpdbt = rpdbT(device=config["process"]["device"])
+        self.rpdbt = rpdbT(device=config["model"]["devlist"][-1])
 
     def forward(self, predictions, targets):
         predList = []
