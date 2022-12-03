@@ -9,7 +9,8 @@ from Bio.PDB.PDBParser import PDBParser
 from Bio.PDB.MMCIFParser import MMCIFParser
 
 from .rdb import openDb, pqry1, pqry
-import numpy as np
+
+# import numpy as np
 import torch
 
 
@@ -643,33 +644,33 @@ class rpdbT:
         a4_pre_rotation[dRev] = hAtoms[dH2ndx, 0][dRev]
         a4_pre_rotation[dFwd] = hAtomsR[dH2ndx, 2][dFwd]
 
-        npa4pr = a4_pre_rotation.cpu().detach().numpy()
-        nph0 = (hAtoms[dH2ndx, 0][dRev]).cpu().detach().numpy()
-        nph1 = (hAtomsR[dH2ndx, 2][dFwd]).cpu().detach().numpy()
-        
-        # numpy multiply, add operations below intermediate array but out=
-        # not working with masking:
-        a4_pre_rotation[:, 2] = torch.multiply(a4_pre_rotation[:, 2], -1)  # a4 to +Z
-
-        npa4pr2 = a4_pre_rotation.cpu().detach().numpy()
-
-        a4shift = torch.empty(
-            dihedraCount, device=torch.device(self.device), dtype=torch.float
-        )
-        a4shift[dRev] = hedraL23[dH2ndx][dRev]  # len23
-        a4shift[dFwd] = hedraL12[dH2ndx][dFwd]  # len12
-
-        npa4s = a4shift.cpu().detach().numpy()
-
-        a4_pre_rotation[:, 2] = torch.add(
-            a4_pre_rotation[:, 2],
-            a4shift,
-        )  # so a2 at origin
-
-        npa4pr3 = a4_pre_rotation.cpu().detach().numpy()
-
         """
         if dbg:
+            npa4pr = a4_pre_rotation.cpu().detach().numpy()
+            nph0 = (hAtoms[dH2ndx, 0][dRev]).cpu().detach().numpy()
+            nph1 = (hAtomsR[dH2ndx, 2][dFwd]).cpu().detach().numpy()
+
+            # numpy multiply, add operations below intermediate array but out=
+            # not working with masking:
+            a4_pre_rotation[:, 2] = torch.multiply(a4_pre_rotation[:, 2], -1)  # a4 to +Z
+
+            npa4pr2 = a4_pre_rotation.cpu().detach().numpy()
+
+            a4shift = torch.empty(
+                dihedraCount, device=torch.device(self.device), dtype=torch.float
+            )
+            a4shift[dRev] = hedraL23[dH2ndx][dRev]  # len23
+            a4shift[dFwd] = hedraL12[dH2ndx][dFwd]  # len12
+
+            npa4s = a4shift.cpu().detach().numpy()
+
+            a4_pre_rotation[:, 2] = torch.add(
+                a4_pre_rotation[:, 2],
+                a4shift,
+            )  # so a2 at origin
+
+            npa4pr3 = a4_pre_rotation.cpu().detach().numpy()
+
             print("dihedraCount", dihedraCount)
             print("a4shift", a4shift[0:10])
             print("a4_pre_rotation", a4_pre_rotation[0:10])
@@ -710,7 +711,7 @@ class rpdbT:
         dAtoms[:, 3][dFwd] = a4rot[dFwd]
         dAtoms[:, 3][dRev] = a4rot[dRev]
 
-        dA = dAtoms.cpu().detach().numpy()
-        paErr = np.any((dA < -5) | (dA > 5))
+        # dA = dAtoms.cpu().detach().numpy()
+        # paErr = np.any((dA < -5) | (dA > 5))
 
         return dAtoms
