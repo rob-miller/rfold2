@@ -3,7 +3,7 @@
 from .base_mfn import BaseMfn
 from data.gridExplore import gridProt
 from data.dbLoad import dbLoad
-from utils.rdb import openDb, pqry, pqry1, pqry1p
+from utils.rdb import openDb, pqry, pqry1  # , pqry1p
 from utils.rpdb import (
     resList,
     crMapH,
@@ -19,7 +19,7 @@ from utils import parse_configuration
 from models import get_model, checkpoint_load
 from torchinfo import summary
 
-from psycopg2.extras import DictCursor
+# from psycopg2.extras import DictCursor
 import torch
 
 import numpy as xp
@@ -42,7 +42,7 @@ class NNOnlyMfn(BaseMfn):
         self.maxd = math.sqrt(
             3 * (self.step * self.step)
         )  # diagonal between 2 grid points
-        # self.gp.smArr = [n for n in range(self.gp.search_multi)]  # used by argpartition
+        self.smArr = [n for n in range(self.gp.search_multi)]  # used by argpartition
         self.nlp = self.gp.getGPnlp(self.points, self.step)
 
         gridRes = self.configuration["grid_resolution"]
@@ -99,35 +99,44 @@ class NNOnlyMfn(BaseMfn):
         print(f"Reading config file {configDict['netconfig']}...")
         config = parse_configuration(configDict["netconfig"])
 
-        if "cuda" in configDict:
-            config["process"]["device"] = f"cuda:{configDict['cuda']}"
-        if args.cuda:
-            config["process"]["device"] = f"cuda:{args.cuda}"
-        if "cpu" in configDict and configDict["cpu"]:
-            config["process"]["device"] = "cpu"
-        if args.cpu:
-            config["process"]["device"] = "cpu"
+        if "cudalist" in configDict:
+            config["model"]["devlist"] = f"cuda:{configDict['cudalist']}"
+        if args.cudalist:
+            config["model"]["devlist"] = f"cuda:{args.cudalist}"
+        if ("cpu" in configDict and configDict["cpu"]) or args.cpu:
+            for i in range(len(config["model"]["devlist"])):
+                config["model"]["devlist"][i] = "cpu"
 
-        print(f"device: {config['process']['device']}")
+        print(f"devlist: {config['model']['devlist']}")
         full_dataset = get_dataset(config["dataset"])  # need for in, out dims
         if hasattr(full_dataset, "inputDim"):
             config["model"]["input_dim"] = full_dataset.inputDim
             config["model"]["output_dim"] = full_dataset.outputDim
-
+        if args.fake:
+            full_dataset.__init__(config["dataset"])
+            self.dataset = full_dataset
         print(f"input dimension {config['model']['input_dim']}")
         print(f"output dimension {config['model']['output_dim']}")
 
-        print("Initializing model...")
-        model = get_model(config["model"]).to(config["process"]["device"])
+        if args.fake:
+            model = None
+            print("fake from database, no nn load")
+        else:
+            print("Initializing model...")
+            model = get_model(config["model"])
+            for d in range(len(config["model"]["devlist"])):
+                model.netlist[d].to(config["model"]["devlist"][d])
+                summary(model.netlist[0])
+            print("------")
 
-        summary(model)
-        epochs = config["process"]["epochs"]
-        load_epoch = 0
-        if config["checkpoint"]["load"] != -1:  # can use "last" instead of number
-            if checkpoint_load(model, config):
-                load_epoch = config["checkpoint"]["load"]
-                print(f"re-loaded model from epoch {load_epoch}...")
-                epochs += load_epoch
+            summary(model)
+            epochs = config["process"]["epochs"]
+            load_epoch = 0
+            if config["checkpoint"]["load"] != -1:  # can use "last" instead of number
+                if checkpoint_load(model, config):
+                    load_epoch = config["checkpoint"]["load"]
+                    print(f"re-loaded model from epoch {load_epoch}...")
+                    epochs += load_epoch
         self.nnconfig = config
         return model
 
@@ -180,15 +189,18 @@ class NNOnlyMfn(BaseMfn):
         if not chain.internal_coord:
             chain.atom_to_internal_coordinates()
         cic = chain.internal_coord
-        # compute hedra L13 and dihedra L14
-        # dhSigns = (cic.dihedral_signs()).astype(int)
         distPlot = cic.distance_plot()
-        # cic.distplot_to_dh_arrays(distPlot, dhSigns)
+        if not hasattr(cic, "dihedra_signs"):
+            # create arrays to hold h13, d14, dsign
+            # compute hedra L13 and dihedra L14
+            dhSigns = (cic.dihedral_signs()).astype(int)
+            cic.distplot_to_dh_arrays(distPlot, dhSigns)
 
         coordDict = self.dbl.loadResidueEnvirons(cic, distPlot)
-
+        if self.configuration["args"].fake:
+            chn = (cic.chain.full_id[0] + cic.chain.full_id[2]).upper()
         resArr = xp.zeros([len(cic.ordered_aa_ic_list)], dtype=float)
-        ndx = 0
+        rndx, dndx, hndx = 0, 0, 0
         for ric in cic.ordered_aa_ic_list:
 
             """
@@ -256,17 +268,37 @@ class NNOnlyMfn(BaseMfn):
             else:
                 inputArr = gridArr.flatten()
 
-            pred = self.model(inputArr).cpu().detach().numpy()
-            dhLenArr, dhChrArr, hArr = (
+            if self.configuration["args"].fake:
+                rsp = ric.rbase[2] + str(ric.rbase[0]) + (ric.rbase[1] or "")
+                rk = pqry1(
+                    self.cur,
+                    "select res_key from residue r, chain c where"
+                    f" c.chain_name = '{chn}' and r.res_seqpos = '{rsp}' and c.chain_key = r.chain_key",
+                )
+
+                # try:
+                inp, pred = self.dataset.getRkInOut(rk, ric.lc)
+                inp = inp.numpy()
+                # except(TypeError):  # no data for terminal residues
+                #    pred = self.model(inputArr).cpu().detach().numpy()
+                inputArr = inputArr.numpy()
+                # for i in range(len(inp)):
+                #    print(f"{i} {inp[i]:.3f} {inputArr[i]:.3f}")
+            else:
+                pred = self.model(inputArr).cpu().detach().numpy()
+            if torch.is_tensor(pred):
+                pred = pred.numpy()
+
+            dhChrArr, dhLenArr, hArr = (
                 pred[0:MaxDihedron],
                 pred[MaxDihedron : 2 * MaxDihedron],
-                pred[2 * MaxDihedron : 2 * MaxDihedron + MaxHedron],
+                pred[2 * MaxDihedron : 2 * MaxDihedron + 3 * MaxHedron],
             )
 
             # truncate NN output for specific residue
             dhLenArr = dhLenArr[0 : len(self.dihedraMap[ric.lc])]
             dhChrArr = dhLenArr[0 : len(self.dihedraMap[ric.lc])]
-            hArr = xp.reshape(hArr[0 : len(self.hedraMap[ric.lc])], (-1, 3))
+            hArr = xp.reshape(hArr[0 : 3 * len(self.hedraMap[ric.lc])], (-1, 3))
 
             # denormalize from dbmng.py:gnoLengths() code:
             # "normalise dihedra len to -1/+1"
@@ -277,16 +309,62 @@ class NNOnlyMfn(BaseMfn):
             dhChrArr[dhChrArr < 0] = -1
             dhChrArr[dhChrArr >= 0] = 1
 
-            print("hello")
+            # working here on angle order
+            for dh in dict(
+                sorted(ric.dihedra.items(), key=lambda item: item[1].e_class)
+            ):
+                dho = ric.dihedra[dh]
+                print(
+                    dh, dho.e_class, cic.dihedraL14[dho.ndx], cic.dihedra_signs[dho.ndx]
+                )
+            print(dhLenArr)
+            print(dhChrArr)
+            for h in dict(sorted(ric.hedra.items(), key=lambda item: item[1].e_class)):
+                ho = ric.hedra[h]
+                print(
+                    h,
+                    ho.e_class,
+                    cic.hedraL12[ho.ndx],
+                    cic.hedraL23[ho.ndx],
+                    cic.hedraL13[ho.ndx],
+                )
+            print(hArr)
+            dhndx = 0
+            if len(ric.rprev) != 0:
+                rp = ric.rprev[0]
+                ndx = ric.pick_angle("omg").ndx
+                print(f"p-omg d14 {cic.dihedraL14[ndx]:.3f} <- {dhLenArr[dhndx]:.3f}")
+                print(
+                    f"p-omg chr {cic.dihedra_signs[ndx]:.3f} <- {dhChrArr[dhndx]:.3f}"
+                )
+                # cic.dihedraL14[ndx] = dhLenArr[dhndx]
+                # cic.dihedra_signs[ndx] = dhChrArr[dhndx]
+                dhndx += 1
+                ndx = ric.pick_angle("phi").ndx
+                print(f"p-phi d14 {cic.dihedraL14[ndx]:.3f} <- {dhLenArr[dhndx]:.3f}")
+                print(
+                    f"p-phi chr {cic.dihedra_signs[ndx]:.3f} <- {dhChrArr[dhndx]:.3f}"
+                )
+                # cic.dihedraL14[ndx] = dhLenArr[dhndx]
+                # cic.dihedra_signs[ndx] = dhChrArr[dhndx]
+                dhndx += 1
+            else:
+                dhndx += 2
+            """
+            for dl, dc in zip(dhLenArr, dhChrArr):
+                print("d14", cic.dihedraL14[dndx], dl)
+                cic.dihedraL14[dndx] = dl
+                print("dc", cic.dihedra_signs[dndx], dc)
+                cic.dihedra_signs[dndx] = dc
+                dndx += 1
+            for hl in hArr:
+                cic.hedraL12[hndx] = hl[0]
+                cic.hedraL23[hndx] = hl[1]
+                cic.hedraL13[hndx] = hl[2]
+                hndx += 1
+            """
+            # compute E for last conformation because convenient
 
-            # for gNdx in ea_grid:
-            # replace grid voxels with any voxels populated around this residue
-            # this is only populated voxels, so index is only relevant to dict
-            #    gridDictCopy[int(gNdx)] = ea_grid[gNdx]
-
-            # distArrX = xp.linalg.norm(
-            #    locArr[:, None, :] - self.grids["X"][None, :, :], axis=-1
-            # )
             distArrR = xp.linalg.norm(
                 locArr[:, None, :] - self.grids[ric.lc][None, :, :], axis=-1
             )
@@ -302,11 +380,11 @@ class NNOnlyMfn(BaseMfn):
 
             # avg energy per contact
             # local env * neg-log-prob array, divide by local env contacts to reward contacts/compactness over fewer contacts
-            resArr[ndx] = xp.sum(distribArrRC * self.nlp[ric.lc]) / xp.count_nonzero(
+            resArr[rndx] = xp.sum(distribArrRC * self.nlp[ric.lc]) / xp.count_nonzero(
                 distribArrRC
             )
-            ndx += 1
+            rndx += 1
 
         globAvg = xp.sum(resArr) / len(resArr)
-
+        cic.distance_to_internal_coordinates()
         return globAvg, resArr
