@@ -467,6 +467,7 @@ def gnoLengths(rklist):
     for rk in rklist:
         dhlist = []
 
+        # di/hedron_class class_key is random from input order! BUG BUG BUG
         # get rprev phi and omega dihedral angles
         rpk = pqry1(cur, f"select rprev from residue where res_key = {rk}")
         if rpk is not None:
@@ -515,6 +516,7 @@ def gnoLengths(rklist):
         else:
             hlist = [[rangeList[0] / 2, rangeList[1] / 2, rangeList[2] / 2]]
 
+        # rtm seems like a bug: should exclude omgH1key below?  BUG BUG BUG
         pqry(
             cur,
             f"select len12, len23, len13 from hedron where res_key = {rk}"
