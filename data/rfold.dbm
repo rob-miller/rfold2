@@ -3,7 +3,7 @@
 CAUTION: Do not modify this file unless you know what you are doing.
  Unexpected results may occur if the code is changed deliberately.
 -->
-<dbmodel pgmodeler-ver="1.0.0-alpha" use-changelog="false" last-position="0,0" last-zoom="0.7" max-obj-count="45"
+<dbmodel pgmodeler-ver="1.0.0-alpha" use-changelog="false" last-position="0,156" last-zoom="0.7" max-obj-count="45"
 	 default-owner="postgres"
 	 layers="Default layer"
 	 active-layers="0"
@@ -313,7 +313,7 @@ CAUTION: Do not modify this file unless you know what you are doing.
 	<schema name="public"/>
 	<role name="rfold"/>
 	<position x="940" y="1420"/>
-	<column name="acr_key" not-null="true" sequence="public.acr_seq">
+	<column name="acr_key" not-null="true">
 		<type name="integer" length="0"/>
 	</column>
 	<column name="cr_class" not-null="true">
