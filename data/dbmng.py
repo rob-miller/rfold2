@@ -27,6 +27,8 @@ from gridExplore import gridProt
 from Bio.PDB.Chain import Chain
 from Bio.PDB.ic_data import covalent_radii
 
+from Bio.PDB.internal_coords import Edron
+
 import numpy as np
 
 
@@ -216,13 +218,13 @@ def parseArgs():
 
     arg_parser.add_argument(
         "-loadall",
-        help="-dbl -norm -gno -sd -grid -gnlp -gni -gnir -tst",
+        help="-dbl -norm -sd -gno -grid -gnlp -gni -gnir -tst",
         action="store_true",
     )
 
     args = arg_parser.parse_args()
 
-    if args.load or args.loadall:
+    if args.load or args.loadall or args.loadall2:
         args.dbl = args.gni = args.grid = args.gno = args.gnir = args.tst = True
         if args.loadall:
             args.norm = args.sd = args.gnlp = True
@@ -340,7 +342,9 @@ def genNormFactors():
         cur0,
         "select avg(len12), stddev(len12), avg(len23), stddev(len23), avg(len13), stddev(len13) from hedron",
     )
+    # min len defined as avg minus 3 sd
     minLenList = [r[2 * i] - (3 * r[(2 * i) + 1]) for i in range(3)]
+    # range defined as +/- 3 sd
     rangeList = [6 * r[(2 * i) + 1] for i in range(3)]
 
     # dihedra normalisation parameter
@@ -418,10 +422,13 @@ minLen14 = None
 rangeLen14 = None
 hMinLenArr = None
 hRangeArr = None
+hAvgArr = None
+avgLen14 = None
 
 
 def getNorms():
     global minLenList, rangeList, minLen14, rangeLen14, hMinLenArr, hRangeArr
+    global hAvgArr, avgLen14
     minLenList = []
     minLenList.append(
         pqry1(cur0, "select min from len_normalization where name = 'len12'")
@@ -445,21 +452,29 @@ def getNorms():
 
     minLen14 = pqry1(cur0, "select min from len_normalization where name = 'len14'")
     rangeLen14 = pqry1(cur0, "select range from len_normalization where name = 'len14'")
+    avgLen14 = minLen14 / (rangeLen14 / 2)
 
     hMinLenArr = np.array(minLenList, dtype=np.float64)
     hRangeArr = np.array(rangeList, dtype=np.float64)
+    hAvgArr = hMinLenArr + (hRangeArr / 2)
 
 
 def gnoLengths(rklist):
     """populates dhlen table with normalized di/hedron interatom distances and chiralities"""
     global minLenList, rangeList, minLen14, rangeLen14, hMinLenArr, hRangeArr
+    global avgLen14, hAvgArr
 
     conn = openDb()
     cur = conn.cursor()
 
-    (phiClassKey, omgClassKey, acbClassKey, phiH1key, omgH1key) = get_phi_omg_classes(
-        cur
-    )
+    (
+        phiClassKey,
+        omgClassKey,
+        acbClassKey,
+        psiH1key,
+        phiH1key,
+        omgH1key,
+    ) = get_phi_omg_classes(cur)
 
     count = 0
     total = len(rklist)
@@ -467,34 +482,47 @@ def gnoLengths(rklist):
     for rk in rklist:
         dhlist = []
 
-        # di/hedron_class class_key is random from input order! BUG BUG BUG
-        # get rprev phi and omega dihedral angles
+        # get rprev omega and phi dihedral angles
         rpk = pqry1(cur, f"select rprev from residue where res_key = {rk}")
         if rpk is not None:
+            # ak_str for easier debugging
             pqry(
                 cur,
-                f"select len14, chirality from dihedron where res_key = {rpk}"
-                f" and (class_key = {phiClassKey} or class_key = {omgClassKey})"
-                " order by class_key",
+                "select d.ak_str, d.len14, d.chirality from dihedron d, dihedron_class dc where"
+                f" d.res_key = {rpk}"
+                f" and (d.class_key = {omgClassKey} or d.class_key = {phiClassKey})"
+                " and d.class_key = dc.dc_key"
+                " order by dc.d_class",  # omg, phi
             )
             for dh in cur.fetchall():
-                dhlist += dh
+                dhlist += dh[1:]
+                # print(dh[0], dh[1:])
         else:
-            dhlist = [rangeLen14 / 2, 0]  # null state with chirality = 0
+            # null state with chirality = 0 for prev omg, phi
+            dhlist = [avgLen14, 0, avgLen14, 0]
 
         # get this residue all dihedral angles except phi, omg (use rprev above)
         pqry(
             cur,
-            f"select len14, chirality from dihedron where res_key = {rk}"
-            f" and class_key != {phiClassKey} and class_key != {omgClassKey}"
-            " order by class_key",
+            "select d.ak_str, d.len14, d.chirality from dihedron d where"
+            f" d.res_key = {rk}"
+            f" and d.class_key != {phiClassKey} and d.class_key != {omgClassKey}",
         )
+        dhdict = {}
         for dh in cur.fetchall():
-            dhlist += dh
+            dhdict[Edron.gen_tuple(dh[0])] = dh[1:]
+
+        for k in sorted(dhdict):
+            dhlist += dhdict[k]
+            # print(k, dhdict[k])
 
         # separate chirality from distance values to enable sigmoid on chirality
         dhLenArr = np.array(dhlist[::2], dtype=np.float64)
         dhChrArr = np.array(dhlist[1::2], dtype=np.float64)
+
+        # print(dhLenArr)
+        # print(dhChrArr)
+
         # normalise dihedra len to -1/+1 (chirality already on -1/+1)
         # https://stats.stackexchange.com/questions/178626/how-to-normalize-data-between-1-and-1
         dhLenArr = (2 * ((dhLenArr - minLen14) / rangeLen14)) - 1
@@ -502,30 +530,39 @@ def gnoLengths(rklist):
         # get hedra
         hlist = []
 
-        # get rprev hedra to complete rprev phi and omega dihedral angles
+        # get rprev hedra to complete r phi and omega dihedral angles
 
         if rpk is not None:
             pqry(
                 cur,
-                f"select len12, len23, len13 from hedron where res_key = {rpk}"
-                f" and (class_key = {phiH1key} or class_key = {omgH1key})"
-                " order by class_key",
+                "select h.ak_str, h.len12, h.len23, h.len13 from hedron h, hedron_class hc"
+                f" where h.res_key = {rpk}"
+                f" and (h.class_key = {omgH1key} or h.class_key = {phiH1key})"
+                " and h.class_key = hc.hc_key"
+                " order by hc.h_class",  # omg, phi
             )
             for h in cur.fetchall():
-                hlist += [h]
+                hlist += [h[1:]]
+                # print(h[0], h[1:])
         else:
-            hlist = [[rangeList[0] / 2, rangeList[1] / 2, rangeList[2] / 2]]
+            hlist = [hAvgArr, hAvgArr]
 
-        # rtm seems like a bug: should exclude omgH1key below?  BUG BUG BUG
+        # exclude phiH1 as use from rprev, but r omgH1 is CACN to get psi 2nd N
         pqry(
             cur,
-            f"select len12, len23, len13 from hedron where res_key = {rk}"
-            f" and class_key != {phiH1key} order by class_key",
+            "select h.ak_str, h.len12, h.len23, h.len13 from hedron h"
+            f" where h.res_key = {rk} and h.class_key != {phiH1key}",
         )
+        hdict = {}
         for h in cur.fetchall():
-            hlist += [h]
+            hdict[Edron.gen_tuple(h[0])] = h[1:]
+
+        for k in sorted(hdict):
+            hlist += [hdict[k]]
+            # print(k, hdict[k])
 
         hArr = np.array(hlist, dtype=np.float64)
+        # print(hArr)
         # normalise hedra len to -1/+1
         hArr = (2 * ((hArr - hMinLenArr) / hRangeArr)) - 1
 
@@ -563,7 +600,8 @@ def gnoCoords(target):
     """populates dhcoords table of atom coords for each dihedron"""
 
     def gnoc_loadResidues(cur, cic, chain_key):
-        dcDict = get_dcDict(cur)
+        # dcDict = get_dcDict(cur)
+        # print(cic.chain.full_id)
         for ric in cic.ordered_aa_ic_list:
             rsp = ric.rbase[2] + str(ric.rbase[0]) + (ric.rbase[1] or "")
 
@@ -579,23 +617,28 @@ def gnoCoords(target):
             if len(ric.rprev) > 0:
                 omg = ric.pick_angle("omg")
                 phi = ric.pick_angle("phi")
-                # dlst = [omg, phi]
+                dlst = [omg, phi]
+            else:
+                # omg = phi = ric.pick_angle("psi")
                 dlst = []
-                for d in ric.dihedra.values():
-                    # filter next omg, phi and alt cb path
-                    if d.e_class not in ["CNCAC", "CACNCA", "CNCACB"]:
-                        dlst.append(d)
-                dlst.sort(key=lambda x: dcDict[x.e_class])
-                dlst2 = [omg, phi] + dlst
-                dndxs = [d.ndx for d in dlst2]
-                datoms = np.array([cic.dAtoms[n] for n in dndxs])
+            for k in sorted(ric.dihedra):
+                d = ric.dihedra[k]
+                # filter next omg, phi and alt cb path
+                if d.e_class not in ["CNCAC", "CACNCA", "CNCACB"]:
+                    dlst.append(d)
+            # dlst.sort(key=lambda x: dcDict[x.e_class])
+            dlst2 = dlst  # [omg, phi] + dlst
 
-                r = pqry1(cur, f"select 1 from dhcoords where res_key = {rk}")
-                if r is None:
-                    cur.execute(
-                        "insert into dhcoords(res_key, bytes) values (%s, %s)",
-                        (rk, pickle.dumps(datoms)),
-                    )
+            # print(ric)
+            dndxs = [d.ndx for d in dlst2]
+            datoms = np.array([cic.dAtoms[n] for n in dndxs])
+
+            r = pqry1(cur, f"select 1 from dhcoords where res_key = {rk}")
+            if r is None:
+                cur.execute(
+                    "insert into dhcoords(res_key, bytes) values (%s, %s)",
+                    (rk, pickle.dumps(datoms)),
+                )
 
     def gnoc_loadPdbChain(cur, pdb_chain, prot_id, chainID, filename):
         # global conn
@@ -642,7 +685,7 @@ def genNNout(targList):
     get_dcDict(cur0)  # pre-load
     rkList = genRkList(targList)
 
-    print(f"starting genNNout for {len(rkList)} residues")
+    print(f"starting gnoLengths for {len(rkList)} residues")
     if PROCESSES > 0:
         lol = splitList(rkList, PROCESSES)
         with Pool(PROCESSES) as p:
@@ -892,23 +935,30 @@ def tstNNout(rklist, resChar=None):
     total = len(rklist)
     print(f"starting tstNNout for {total} residues")
 
-    (phiClassKey, omgClassKey, acbClassKey, phiH1key, omgH1key) = get_phi_omg_classes(
-        cur
-    )
+    (
+        phiClassKey,
+        omgClassKey,
+        acbClassKey,
+        psiH1key,
+        phiH1key,
+        omgH1key,
+    ) = get_phi_omg_classes(cur)
     hedra_counts, dihedra_counts = get_dh_counts(hydrogens=False)
 
     for rk in rklist:
         count += 1
+        problems = 0
         pqry(
             cur,
-            "select r0.res_key, r1.res_char, r1.res_seqpos, c.chain_name from"
-            f" residue r0, residue r1, chain c where r1.res_key = {rk}"
-            " and r1.rprev = r0.res_key and r1.chain_key = c.chain_key"
-            " and r0.std_all_angles",
+            "select r1.rprev, r1.res_char, r1.res_seqpos, c.chain_name from"
+            f" residue r1, chain c where r1.res_key = {rk}"
+            " and r1.chain_key = c.chain_key"
+            " and r1.std_all_angles",
         )
         rslt = cur.fetchall()
         if rslt == []:
-            continue  # skip no rprev
+            continue  # skip no std_all_agles
+
         rpk, rc, rsp, chainName = rslt[0]
         dhLenArr1 = pqry1p(cur, f"select bytes from dhlen where res_key = {rk}")
         dhChrArr1 = pqry1p(cur, f"select bytes from dhchirality where res_key = {rk}")
@@ -927,7 +977,7 @@ def tstNNout(rklist, resChar=None):
 
         # end of aa0_dataset
 
-        dhChrArr, dhLenArr, hArr = outputArr2values(resChar, outputArr)  # rc
+        dhChrArr, dhLenArr, hArr = outputArr2values(rc, outputArr)  # rc
 
         """
         assert np.array_equal(dhLenArr1, dhLenArr)
@@ -936,26 +986,44 @@ def tstNNout(rklist, resChar=None):
         """
 
         hedraAngle, hedraAngleRads, dihedraAngle, dihedraAngleRads = len2ang(
-            resChar, dhChrArr, dhLenArr, hArr  # rc
+            rc, dhChrArr, dhLenArr, hArr  # rc
         )
+        if rpk is not None:
+            pqry(
+                cur,
+                "select d.angle, d.len14, d.chirality, d.class_key from dihedron d,"
+                " dihedron_class dc"
+                f" where d.res_key = {rpk}"
+                f" and (d.class_key = {phiClassKey} or d.class_key = {omgClassKey})"
+                " and d.class_key = dc.dc_key"
+                " order by dc.d_class",  # omg, phi
+            )
+            rsltlst = cur.fetchall()
+            dhndx = 0
+        else:
+            rsltlst = [(0, 0, 0), (0, 0, 0)]
+            dhndx = 2
 
-        pqry(
-            cur,
-            f"select angle, len14, class_key from dihedron where res_key = {rpk}"
-            f" and (class_key = {phiClassKey} or class_key = {omgClassKey})"
-            " order by class_key",
+        q = (
+            f"select d.ak_str, d.angle, d.len14, d.chirality, d.class_key from dihedron d"
+            f" where d.res_key = {rk}"
+            f" and d.class_key != {phiClassKey} and d.class_key != {omgClassKey}"
         )
-        rsltlst = cur.fetchall()
-        pqry(
-            cur,
-            f"select angle, len14, class_key from dihedron where res_key = {rk}"
-            f" and class_key != {phiClassKey} and class_key != {omgClassKey}"
-            f" and class_key != {acbClassKey}"
-            " order by class_key",
-        )
-        rsltlst += cur.fetchall()
+        if acbClassKey is not None:
+            q += f" and d.class_key != {acbClassKey}"
+        pqry(cur, q)
+
+        dhdict = {}
+        for dh in cur.fetchall():
+            dhdict[Edron.gen_tuple(dh[0])] = dh[1:]
+
+        for k in sorted(dhdict):
+            rsltlst.append(dhdict[k])
+            # print(k, dhdict[k])
+
         dbDhArr = np.array([a[0] for a in rsltlst], dtype=float)
         dbDhLArr = np.array([a[1] for a in rsltlst], dtype=float)
+        dbDhCArr = np.array([a[2] for a in rsltlst], dtype=float)
 
         """
         clist = [a[2] for a in rsltlst]
@@ -965,66 +1033,94 @@ def tstNNout(rklist, resChar=None):
         """
 
         if not np.allclose(
-            dihedraAngle[: dihedra_counts[rc]], dbDhArr, rtol=1e-03, atol=1e-05
+            dihedraAngle[dhndx : dihedra_counts[rc]],
+            dbDhArr[dhndx:],
+            rtol=1e-03,
+            atol=1e-05,
         ):
+            problems += 1
             print(chainName, "dihedra", rk, rsp, count)
             """"""
             # print(dihedraAngle)
             # print(dbDhArr)
             # print(np.column_stack((dihedraAngle, dbDhArr)))
             # print(dihedraAngle)
-            print(dihedraAngle[: dihedra_counts[rc]])
-            print(dbDhArr)
+            print("gno lengths    :", dhLenArr[dhndx : dihedra_counts[rc]])
+            print("db lengths     :", dbDhLArr[dhndx:])
+            print("gno chirality  :", dhChrArr[dhndx : dihedra_counts[rc]])
+            print("db chirality   :", dbDhCArr[dhndx:])
+            print("gno len2angles :", dihedraAngle[dhndx : dihedra_counts[rc]])
+            print("db angles      :", dbDhArr[dhndx:])
             # print(dhLenArr)
-            print(dhLenArr[: dihedra_counts[rc]])
-            print(dbDhLArr)
             print()
             """"""
+        if rpk is not None:
+            pqry(
+                cur,
+                "select h.angle, h.len12, h.len23, h.len13 from hedron h, hedron_class hc"
+                f" where h.res_key = {rpk}"
+                f" and (h.class_key = {phiH1key} or h.class_key = {omgH1key})"
+                " and h.class_key = hc.hc_key"
+                " order by hc.h_class",  # omg, phi
+            )
+            rsltlst = cur.fetchall()
+            hndx = 0
+        else:
+            rsltlst = [(0, 0, 0, 0), (0, 0, 0, 0)]
+            hndx = 2
         pqry(
             cur,
-            f"select angle, len12, len23, len13 from hedron where res_key = {rpk}"
-            f" and (class_key = {phiH1key} or class_key = {omgH1key})"
-            " order by class_key",
+            f"select ak_str, angle, len12, len23, len13 from hedron where res_key = {rk}"
+            f" and class_key != {phiH1key}",
         )
-        rsltlst = cur.fetchall()
-        pqry(
-            cur,
-            f"select angle, len12, len23, len13 from hedron where res_key = {rk}"
-            f" and class_key != {phiH1key}"
-            " order by class_key",
-        )
-        rsltlst += cur.fetchall()
+        hdict = {}
+        for h in cur.fetchall():
+            hdict[Edron.gen_tuple(h[0])] = h[1:]
+
+        for k in sorted(hdict):
+            rsltlst += [hdict[k]]
+            # print(k, hdict[k])
+
         dbHArr = np.array([a[0] for a in rsltlst], dtype=float)
         if not np.allclose(
-            hedraAngle[: hedra_counts[rc]], dbHArr, rtol=1e-03, atol=1e-08
+            hedraAngle[hndx : hedra_counts[rc]], dbHArr[hndx:], rtol=1e-03, atol=1e-08
         ):
+            problems += 1
             print(chainName, "hedra", rk, rsp, count)
             """"""
-            print(hedraAngle)
-            print(dbHArr)
+            print("gno len2angles :", hedraAngle[hndx : hedra_counts[rc]])
+            print("db angles      :", dbHArr[hndx:])
             print()
             """"""
-        dAtoms = lenAng2coords(resChar, hedraAngleRads, hArr, dihedraAngleRads)  # rc
+        dAtoms = lenAng2coords(rc, hedraAngleRads, hArr, dihedraAngleRads)  # rc
 
         dbdAtoms = pqry1p(cur, f"select bytes from dhcoords where res_key = {rk}")
         # print(rc)
+        # if dAtoms is None or dbdAtoms is None:
+        #    print(rpk, rk, rc)
         if not np.allclose(
-            dAtoms[: dihedra_counts[rc]], dbdAtoms, rtol=1e-02, atol=1e-07
+            dAtoms[dhndx : dihedra_counts[rc]], dbdAtoms, rtol=1e-02, atol=1e-07
         ):
+            problems += 1
             print(chainName, "coords", rk, rsp, count)
             """"""
-            zi = zip(dAtoms, dbdAtoms)
+            zi = zip(dAtoms[dhndx:], dbdAtoms)
             for z in zi:
-                if not np.allclose(z[0], z[1], rtol=1e-02, atol=1e-07):
-                    print(z[0].flatten())
-                    print("-")
-                    print(z[1].flatten())
+                if True or not np.allclose(z[0], z[1], rtol=1e-02, atol=1e-07):
+                    print("calc:", z[0].flatten())
+                    print("db  :", z[1].flatten())
                     print("----")
             """"""
             # print(dAtoms)
             #
             # print(dbdAtoms)
             # print()
+
+        if problems > 0:
+            print(f"chain {chainName} {rc} res key {rk} has {problems} problems")
+            pqry(cur, f"update residue set std_all_angles = FALSE where res_key = {rk}")
+            conn.commit()
+            print()
 
         if (count % 100000) == 0:
             print(count, "/", total)
@@ -1075,7 +1171,7 @@ if __name__ == "__main__":
             if pdbidMatch:
                 toProcess.append(pdbidMatch.group(0))
 
-    if len(toProcess) == 0 and not procResidues and not args.gnlp:
+    if len(toProcess) == 0 and not procResidues and not args.gnlp and not args.norm:
         print("no files to process. use '-h' for help")
         sys.exit(0)
 
@@ -1110,6 +1206,7 @@ if __name__ == "__main__":
         gridProtein(targList)
     if args.gnlp:
         gridNlp()
+        print("gridNlp done.")
     if args.gni:
         if args.rc:
             genNNin(targList, gridStep, resChar)
