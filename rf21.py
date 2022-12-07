@@ -127,8 +127,10 @@ def parseArgs():
         "-nncf", dest="nnConfigFile", help="override NN config file for model"
     )
     arg_parser.add_argument(
-        "-cu", dest="cudalist", help="list of int: 0,1,2 - override cuda device in NN config file",
-        type=lambda s: [int(item) for item in s.split(',')]
+        "-cu",
+        dest="cudalist",
+        help="list of int: 0,1,2 - override cuda device in NN config file",
+        type=lambda s: [int(item) for item in s.split(",")],
     )
     arg_parser.add_argument("-cpu", help="load NN on cpu not cuda", action="store_true")
     # arg_parser.add_argument("-fcf", dest="foldConfigFile", help="folding process config file")
@@ -192,8 +194,8 @@ if __name__ == "__main__":
     targGlobalE, targSeqE = environE.evaluate(pdb_structure)
     predGlobalE, predSeqE = environE.evaluate(pdb_structure2)
 
-    print(f"start - targ: {targGlobalE} pred: {predGlobalE}")
+    print(f"start: {targGlobalE} pred: {predGlobalE}")
     for i in range(3):
         globAvg, resArr = moveFn.move(pdb_structure)
-        print(f"targ: {targGlobalE} pred: {globAvg}")
+        print(f"targ : {targGlobalE} pred: {globAvg}")
     print("finished.")
