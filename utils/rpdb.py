@@ -9,6 +9,7 @@ from Bio.PDB.PDBParser import PDBParser
 from Bio.PDB.MMCIFParser import MMCIFParser
 
 from Bio.PDB.vectors import multi_rot_Z
+from Bio.PDB.internal_coords import Edron
 
 # from Bio.PDB.vectors import multi_coord_space, coord_space
 
@@ -212,12 +213,13 @@ def getPDB(target):
 
 
 def get_dh_counts(hydrogens: bool):
+    """Count di/hedra in ic_data.ic_data_sidechains, filter H as spec."""
     global hedra_countsG, dihedra_countsG
     if hedra_countsG is None or dihedra_countsG is None:
 
         # ic_data tables do not include next or prev residues so that
         # includes psi, phi, omg.  That's 3 dihedra and works out to 3 hedra,
-        # plus we use omega H1 from both residue i and i-1
+        # plus we use omega H1 from both residue i (so prev) and i+1 (self)
         hedra_counts = {rc: 4 for rc in resList}  # not in ic_data, plus 1
         dihedra_counts = {rc: 3 for rc in resList}  # psi, phi, omg
 
@@ -287,24 +289,35 @@ def outputArr2values(rc, outputArr):
     if rc == "X":
         rc = "W"
     rhc, rdhc = hedra_counts[rc], dihedra_counts[rc]
-    # resOutputLen = (3 * rhc) + (2 * rdhc)
+
     maxOutputLen = (3 * MaxHedron) + (2 * MaxDihedron)
+
+    # force dhChrArr to +/-1
     dhChrArr = outputArr[0:rdhc]
-    if len(outputArr) != maxOutputLen:  # == resOutputLen:
+    dhChrArr[dhChrArr < 0] = -1
+    dhChrArr[dhChrArr >= 0] = 1
+
+    if len(outputArr) != maxOutputLen:
+        # per residue net
         ndx = 2 * rdhc
         dhLenArr = outputArr[rdhc:ndx]
         hArr = outputArr[ndx:].reshape(1, -1)
     else:
+        # all residues net
+        # split by MaxDihedron, then select rdhc, rhc regions
         dhLenArr = outputArr[MaxDihedron : MaxDihedron + rdhc]
         ndx = 2 * MaxDihedron
         hArr = outputArr[ndx : ndx + (3 * rhc)]
         hArr = hArr.reshape(-1, 3)
 
+    # denormalize from dbmng.py:gnoLengths() code:
     normDict = getNormValues()
 
+    # "normalise dihedra len to -1/+1"
     len14min, len14range = normDict["len14"]
     dhLenArr = len14min + (((dhLenArr + 1) / 2) * len14range)
 
+    # "normalise hedra len to -1/+1"
     hmin = [normDict[x][0] for x in ["len12", "len23", "len13"]]
     hrange = [normDict[x][1] for x in ["len12", "len23", "len13"]]
     hArr = hmin + (((hArr + 1) / 2) * hrange)
@@ -316,14 +329,15 @@ phiClassKey = None
 omgClassKey = None
 acbClassKey = None
 
+psiH1key = None
 phiH1key = None
 omgH1key = None
 
 
 def get_phi_omg_classes(cur):
-    """Get di/hedra class keys for filtreing including alt cbeta"""
-    global phiClassKey, omgClassKey, acbClassKey, phiH1key, omgH1key
-    if None in [phiClassKey, omgClassKey, acbClassKey, phiH1key, omgH1key]:
+    """Get di/hedra class keys for filtering including alt cbeta"""
+    global phiClassKey, omgClassKey, acbClassKey, psiH1key, phiH1key, omgH1key
+    if None in [phiClassKey, omgClassKey, acbClassKey, psiH1key, phiH1key, omgH1key]:
         phiClassKey = pqry1(
             cur, "select dc_key from dihedron_class where d_class = 'CNCAC'"
         )
@@ -334,10 +348,11 @@ def get_phi_omg_classes(cur):
             cur, "select dc_key from dihedron_class where d_class = 'CNCACB'"
         )
 
+        psiH1key = pqry1(cur, "select hc_key from hedron_class where h_class = 'NCAC'")
         phiH1key = pqry1(cur, "select hc_key from hedron_class where h_class = 'CNCA'")
         omgH1key = pqry1(cur, "select hc_key from hedron_class where h_class = 'CACN'")
 
-    return (phiClassKey, omgClassKey, acbClassKey, phiH1key, omgH1key)
+    return (phiClassKey, omgClassKey, acbClassKey, psiH1key, phiH1key, omgH1key)
 
 
 dcDict = None
@@ -368,6 +383,7 @@ def getHedraMap():
             phiClassKey,
             omgClassKey,
             acbClassKey,
+            psiH1key,
             phiH1key,
             omgH1key,
         ) = get_phi_omg_classes(cur)
@@ -383,20 +399,31 @@ def getHedraMap():
 
             pqry(
                 cur,
-                f"select hk1, hk2, reverse from dihedron where res_key = {rpk}"
-                f" and (class_key = {phiClassKey} or class_key = {omgClassKey})"
-                " order by class_key",
+                "select d.hk1, d.hk2, d.reverse from dihedron d, dihedron_class dc"
+                f" where d.res_key = {rpk}"
+                f" and (d.class_key = {phiClassKey} or d.class_key = {omgClassKey})"
+                " and d.class_key = dc.dc_key"
+                " order by dc.d_class",
             )
             rsltList = cur.fetchall()
 
-            pqry(
-                cur,
-                f"select hk1, hk2, reverse from dihedron where res_key = {rk}"
+            q = (
+                f"select ak_str, hk1, hk2, reverse from dihedron where res_key = {rk}"
                 f" and class_key != {phiClassKey} and class_key != {omgClassKey}"
-                f" and class_key != {acbClassKey}"
-                " order by class_key",
             )
-            rsltList += cur.fetchall()
+            if acbClassKey is not None:
+                q += f" and class_key != {acbClassKey}"
+            pqry(cur, q)
+
+            dhdict = {}
+            for dh in cur.fetchall():
+                dhdict[Edron.gen_tuple(dh[0])] = dh[1:]
+
+            for k in sorted(dhdict):
+                # print(k, dhdict[k])
+                rsltList += [dhdict[k]]
+
+            # print()
 
             hk1LocalArr = np.array([r[0] for r in rsltList], dtype=np.int)
             hk2LocalArr = np.array([r[1] for r in rsltList], dtype=np.int)
@@ -404,20 +431,29 @@ def getHedraMap():
 
             pqry(
                 cur,
-                f"select hedron_key from hedron where res_key = {rpk}"
-                f" and (class_key = {phiH1key} or class_key = {omgH1key})"
-                " order by class_key",
+                "select h.hedron_key from hedron h, hedron_class hc"
+                f" where h.res_key = {rpk}"
+                f" and (h.class_key = {phiH1key} or h.class_key = {omgH1key})"
+                " and h.class_key = hc.hc_key"
+                " order by hc.h_class",
             )
             hkl = cur.fetchall()
             pqry(
                 cur,
-                f"select hedron_key from hedron where res_key = {rk}"
-                f"and class_key != {phiH1key}"
-                " order by class_key",
+                f"select ak_str, hedron_key from hedron where res_key = {rk}"
+                f"and class_key != {phiH1key}",
             )
-            hkl += cur.fetchall()
+            hdict = {}
+            for h in cur.fetchall():
+                hdict[Edron.gen_tuple(h[0])] = h[1:]
+
+            for k in sorted(hdict):
+                # print(k, hdict[k])
+                hkl += [hdict[k]]
+
             hkLocalArr = np.array([hk[0] for hk in hkl], dtype=np.int)
 
+            # For every element in one array, find the index in another array
             # https://stackoverflow.com/a/8251757/2783487
             xsorted = np.argsort(hkLocalArr)
             ypos = np.searchsorted(hkLocalArr[xsorted], hk1LocalArr)
@@ -425,7 +461,13 @@ def getHedraMap():
             ypos = np.searchsorted(hkLocalArr[xsorted], hk2LocalArr)
             hk2Arr = xsorted[ypos]
 
+            # print(hk1Arr)
+            # print(hk2Arr)
+            # print(revArr)
+
             hedraMap[rc] = [hk1Arr, hk2Arr, revArr]
+            # print(rc, hedraMap[rc])
+            # print()
 
     return hedraMap
 
@@ -449,6 +491,7 @@ def len2ang(rc, dhChrArr, dhLenArr, hArr):
     hedraMap = getHedraMap()
     if rc == "X":
         rc = "W"
+
     dH1ndx = hedraMap[rc][0]
     dH2ndx = hedraMap[rc][1]
     dFwd = np.logical_not(hedraMap[rc][2])
@@ -470,8 +513,10 @@ def len2ang(rc, dhChrArr, dhLenArr, hArr):
     Zs = (oa + ob + ab) / 2
     # Wsqr = Ws * (Ws - ab) * (Ws - ac) * (Ws - bc)
     # Xsqr = Xs * (Xs - ob) * (Xs - bc) * (Xs - oc)
-    Ysqr = Ys * (Ys - oa) * (Ys - ac) * (Ys - oc)
-    Zsqr = Zs * (Zs - oa) * (Zs - ob) * (Zs - ab)
+
+    # force positive like torch code
+    Ysqr = abs(Ys * (Ys - oa) * (Ys - ac) * (Ys - oc))
+    Zsqr = abs(Zs * (Zs - oa) * (Zs - ob) * (Zs - ab))
     Hsqr = (
         4 * oa * oa * bc * bc - np.square((ob * ob + ac * ac) - (oc * oc + ab * ab))
     ) / 16

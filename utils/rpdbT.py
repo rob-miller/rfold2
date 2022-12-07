@@ -7,6 +7,7 @@ import gzip
 from Bio.PDB import ic_data
 from Bio.PDB.PDBParser import PDBParser
 from Bio.PDB.MMCIFParser import MMCIFParser
+from Bio.PDB.internal_coords import Edron
 
 from .rdb import openDb, pqry1, pqry
 
@@ -213,7 +214,7 @@ class rpdbT:
 
             # ic_data tables do not include next or prev residues so that
             # includes psi, phi, omg.  That's 3 dihedra and works out to 3 hedra,
-            # plus we use omega H1 from both residue i and i-1
+            # plus we use omega H1 from both residue i (so prev) and i+1 (self)
             hedra_counts = {rc: 4 for rc in self.resList}  # not in ic_data, plus 1
             dihedra_counts = {rc: 3 for rc in self.resList}  # psi, phi, omg
 
@@ -278,26 +279,35 @@ class rpdbT:
         if rc == "X":
             rc = "W"
         rhc, rdhc = hedra_counts[rc], dihedra_counts[rc]
-        # resOutputLen = (3 * rhc) + (2 * rdhc)
+
         maxOutputLen = (3 * self.MaxHedron) + (2 * self.MaxDihedron)
+
+        # force dhChrArr to +/-1
         dhChrArr = outputArr[0:rdhc].clone().detach()
         dhChrArr[dhChrArr < 0] = -1.0
         dhChrArr[dhChrArr >= 0] = 1.0
-        if len(outputArr) != maxOutputLen:  # == resOutputLen:
+        
+        if len(outputArr) != maxOutputLen:
+            # per residue net
             ndx = 2 * rdhc
             dhLenArr = outputArr[rdhc:ndx]
             hArr = outputArr[ndx:].reshape(1, -1)
         else:
+            # all residues net
+            # split by MaxDihedron, then select rdhc, rhc regions
             dhLenArr = outputArr[self.MaxDihedron : self.MaxDihedron + rdhc]
             ndx = 2 * self.MaxDihedron
             hArr = outputArr[ndx : ndx + (3 * rhc)]
             hArr = hArr.reshape(-1, 3)
 
+        # denormalize from dbmng.py:gnoLengths() code
         normDict = self.getNormValues()
 
+        # "normalise dihedra len to -1/+1"
         len14min, len14range = normDict["len14"]
         dhLenArr = len14min + (((dhLenArr + 1) / 2) * len14range)
 
+        # "normalise hedra len to -1/+1"
         hmin = torch.tensor(
             [normDict[x][0] for x in ["len12", "len23", "len13"]],
             device=torch.device(self.device),
@@ -316,6 +326,7 @@ class rpdbT:
     omgClassKey = None
     acbClassKey = None
 
+    psiH1key = None
     phiH1key = None
     omgH1key = None
 
@@ -339,6 +350,9 @@ class rpdbT:
                 cur, "select dc_key from dihedron_class where d_class = 'CNCACB'"
             )
 
+            self.psiH1key = pqry1(
+                cur, "select hc_key from hedron_class where h_class = 'NCAC'"
+            )
             self.phiH1key = pqry1(
                 cur, "select hc_key from hedron_class where h_class = 'CNCA'"
             )
@@ -350,6 +364,7 @@ class rpdbT:
             self.phiClassKey,
             self.omgClassKey,
             self.acbClassKey,
+            self.psiH1key,
             self.phiH1key,
             self.omgH1key,
         )
@@ -377,6 +392,7 @@ class rpdbT:
                 phiClassKey,
                 omgClassKey,
                 acbClassKey,
+                psiH1key,
                 phiH1key,
                 omgH1key,
             ) = self.get_phi_omg_classes(cur)
@@ -392,20 +408,28 @@ class rpdbT:
 
                 pqry(
                     cur,
-                    f"select hk1, hk2, reverse from dihedron where res_key = {rpk}"
-                    f" and (class_key = {phiClassKey} or class_key = {omgClassKey})"
-                    " order by class_key",
+                    "select d.hk1, d.hk2, d.reverse from dihedron d, dihedron_class dc"
+                    f" where d.res_key = {rpk}"
+                    f" and (d.class_key = {phiClassKey} or d.class_key = {omgClassKey})"
+                    " and d.class_key = dc.dc_key"
+                    " order by dc.d_class",
                 )
                 rsltList = cur.fetchall()
 
-                pqry(
-                    cur,
-                    f"select hk1, hk2, reverse from dihedron where res_key = {rk}"
+                q = (
+                    f"select ak_str, hk1, hk2, reverse from dihedron where res_key = {rk}"
                     f" and class_key != {phiClassKey} and class_key != {omgClassKey}"
-                    f" and class_key != {acbClassKey}"
-                    " order by class_key",
                 )
-                rsltList += cur.fetchall()
+                if acbClassKey is not None:
+                    q += f" and class_key != {acbClassKey}"
+                    pqry(cur, q)
+
+                dhdict = {}
+                for dh in cur.fetchall():
+                    dhdict[Edron.gen_tuple(dh[0])] = dh[1:]
+
+                for k in sorted(dhdict):
+                    rsltList += [dhdict[k]]
 
                 hk1LocalArr = torch.tensor(
                     [r[0] for r in rsltList],
@@ -428,18 +452,26 @@ class rpdbT:
 
                 pqry(
                     cur,
-                    f"select hedron_key from hedron where res_key = {rpk}"
-                    f" and (class_key = {phiH1key} or class_key = {omgH1key})"
-                    " order by class_key",
+                    "select h.hedron_key from hedron h, hedron_class hc"
+                    f" where h.res_key = {rpk}"
+                    f" and (h.class_key = {phiH1key} or h.class_key = {omgH1key})"
+                    " and h.class_key = hc.hc_key"
+                    " order by hc.h_class",
                 )
                 hkl = cur.fetchall()
                 pqry(
                     cur,
-                    f"select hedron_key from hedron where res_key = {rk}"
-                    f"and class_key != {phiH1key}"
-                    " order by class_key",
+                    f"select ak_str, hedron_key from hedron where res_key = {rk}"
+                    f"and class_key != {phiH1key}",
                 )
-                hkl += cur.fetchall()
+                # hkl += cur.fetchall()
+                hdict = {}
+                for h in cur.fetchall():
+                    hdict[Edron.gen_tuple(h[0])] = h[1:]
+
+                for k in sorted(hdict):
+                    hkl += [hdict[k]]
+
                 hkLocalArr = torch.tensor(
                     [hk[0] for hk in hkl],
                     dtype=torch.float,
