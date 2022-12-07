@@ -167,11 +167,13 @@ class dbLoad:
         return pqry1(self.cur, qry)
 
     def load_covalent_radii(self):
+        ndx = 1  # needs to match crMap
         for str, rad in covalent_radii.items():
             self.dlq(
-                "insert into atom_covalent_radii(cr_class, cr_radius)"
-                f" values('{str}', {rad}) on conflict do nothing",
+                "insert into atom_covalent_radii(acr_key, cr_class, cr_radius)"
+                f" values({ndx}, '{str}', {rad}) on conflict do nothing",
             )
+            ndx += 1
 
     def load_cr_pairs(self):
         self.dlq("select acr_key from atom_covalent_radii;")
@@ -705,17 +707,25 @@ class dbLoad:
                 self.dlq(
                     "select r.res_key, r.res_char,"
                     " (select count(*) from hedron h where h.res_key = r.res_key),"
-                    " (select count(*) from dihedron d where d.res_key = r.res_key)"
+                    " (select count(*) from dihedron d where d.res_key = r.res_key),"
+                    " r.rnext"
                     f" from residue r where r.chain_key = {chain_key} and"
                     " length(r.res_char) = 1 order by r.res_key",
                 )
-                rkchdList = [(r[0], r[1], r[2], r[3]) for r in self.cur.fetchall()]
+                rkchdList = [
+                    (r[0], r[1], r[2], r[3], r[4]) for r in self.cur.fetchall()
+                ]
                 hedra_counts, dihedra_counts = get_dh_counts(hydrogens=False)
                 # hedra_counts -1 for extra omg H1
                 rkclist = [
                     (r[0], r[1])
                     for r in rkchdList
-                    if r[2] == hedra_counts[r[1]] - 1 and r[3] == dihedra_counts[r[1]]
+                    if (r[2] == hedra_counts[r[1]] - 1 and r[3] == dihedra_counts[r[1]])
+                    or (  # allow terminal residues
+                        r[4] is None
+                        and r[2] == hedra_counts[r[1]] - 2
+                        and r[3] == dihedra_counts[r[1]] - 2
+                    )
                 ]
                 for rk, rc in rkclist:
                     self.dlq(
