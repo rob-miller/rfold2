@@ -418,7 +418,7 @@ class gridProt:
                     " z_start, z_fin, z_count) values"
                     f" ('{rc}', {step}, {points[rc]}, {gridDef[rc]['x'][0]},"
                     f" {gridDef[rc]['x'][1]}, {gridDef[rc]['x'][2]}, {gridDef[rc]['y'][0]}, {gridDef[rc]['y'][1]}, {gridDef[rc]['y'][2]},"
-                    f" {gridDef[rc]['z'][0]}, {gridDef[rc]['z'][1]}, {gridDef[rc]['z'][1]})"
+                    f" {gridDef[rc]['z'][0]}, {gridDef[rc]['z'][1]}, {gridDef[rc]['z'][2]})"
                     " on conflict (res_char, step) do nothing",
                     # " on conflict (res_char, step) do update set (x_count, y_count, z_count) ="
                     # f" ({gridDef[rc]['x'][2]}, {gridDef[rc]['y'][2]}, {gridDef[rc]['z'][2]})",
