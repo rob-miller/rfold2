@@ -10,10 +10,13 @@ from utils.rpdb import (
     crMapNoH,
     NoAtomCR,
     resMap,
+    outputArr2values,
     MaxHedron,
     MaxDihedron,
 )
 from Bio.PDB.Chain import Chain
+# from Bio.PDB.internal_coords import AtomKey
+
 from datasets import get_dataset
 from utils import parse_configuration
 from models import get_model, checkpoint_load
@@ -200,36 +203,8 @@ class NNOnlyMfn(BaseMfn):
         if self.configuration["args"].fake:
             chn = (cic.chain.full_id[0] + cic.chain.full_id[2]).upper()
         resArr = xp.zeros([len(cic.ordered_aa_ic_list)], dtype=float)
-        rndx, dndx, hndx = 0, 0, 0
+        rndx = 0
         for ric in cic.ordered_aa_ic_list:
-
-            """
-            # testing code
-            chn = (cic.chain.full_id[0] + cic.chain.full_id[2]).upper()
-            rsp = ric.rbase[2] + str(ric.rbase[0]) + (ric.rbase[1] or "")
-            rk = pqry1(
-                self.cur,
-                "select res_key from residue r, chain c where"
-                f" c.chain_name = '{chn}' and r.res_seqpos = '{rsp}' and c.chain_key = r.chain_key",
-            )
-            self.curj = self.conn.cursor(cursor_factory=DictCursor)
-            self.curj.execute(
-                f"select jdict from eagn where res_key = {rk} and grid_ref = {self.gref}"
-            )
-            ea_grid = self.curj.fetchone()[0]
-            gdc2 = copy.deepcopy(self.gridDict)
-            for gp in gdc2.keys():
-                gdc2[gp][0:3] = [0.0, 0.0, 0.0]  # pre-normalize
-            for gNdx in ea_grid:
-                # replace grid voxels with any voxels populated around this residue
-                # this is only populated voxels, so index is only relevant to dict
-                gdc2[int(gNdx)] = ea_grid[gNdx]
-
-            # make numpy array (used voxels over all db, with changes for this residue)
-            gridArr2 = torch.tensor([gp for gp in gdc2.values()], dtype=torch.float32)
-            gridArr2np = xp.array([gp for gp in gdc2.values()], dtype=xp.float32)
-            """
-
             crArr, locArr0 = coordDict[ric]
             locArr = xp.array([la[0:3] for la in locArr0])
 
@@ -253,11 +228,7 @@ class NNOnlyMfn(BaseMfn):
                 2 * ((gridArr[:, 0:3] - self.gridMinArr) / (2 * self.step))
             ) - 1
 
-            """
-            # testing code
-            assert (torch.all(torch.eq(gridArr, gridArr2)))
-            """
-
+            # get input arr for NN
             if not self.nnconfig["dataset"]["learnXres"]:
                 inputArr = torch.cat(
                     (
@@ -268,12 +239,14 @@ class NNOnlyMfn(BaseMfn):
             else:
                 inputArr = gridArr.flatten()
 
+            # get output arr from NN or fake from db
             if self.configuration["args"].fake:
                 rsp = ric.rbase[2] + str(ric.rbase[0]) + (ric.rbase[1] or "")
                 rk = pqry1(
                     self.cur,
                     "select res_key from residue r, chain c where"
-                    f" c.chain_name = '{chn}' and r.res_seqpos = '{rsp}' and c.chain_key = r.chain_key",
+                    f" c.chain_name = '{chn}' and r.res_seqpos = '{rsp}'"
+                    " and c.chain_key = r.chain_key",
                 )
 
                 # try:
@@ -289,91 +262,63 @@ class NNOnlyMfn(BaseMfn):
             if torch.is_tensor(pred):
                 pred = pred.numpy()
 
-            dhChrArr, dhLenArr, hArr = (
-                pred[0:MaxDihedron],
-                pred[MaxDihedron : 2 * MaxDihedron],
-                pred[2 * MaxDihedron : 2 * MaxDihedron + 3 * MaxHedron],
-            )
-
-            # truncate NN output for specific residue
-            dhLenArr = dhLenArr[0 : len(self.dihedraMap[ric.lc])]
-            dhChrArr = dhLenArr[0 : len(self.dihedraMap[ric.lc])]
-            hArr = xp.reshape(hArr[0 : 3 * len(self.hedraMap[ric.lc])], (-1, 3))
-
-            # denormalize from dbmng.py:gnoLengths() code:
-            # "normalise dihedra len to -1/+1"
-            dhLenArr = (((dhLenArr + 1) / 2) * self.dhRange) + self.dhMinLen
-            # "normalise hedra len to -1/+1"
-            hArr = (((hArr + 1) / 2) * self.hRangeArr) + self.hMinLenArr
-
-            dhChrArr[dhChrArr < 0] = -1
-            dhChrArr[dhChrArr >= 0] = 1
+            # extract, denormalise, clean results
+            dhChrArr, dhLenArr, hArr = outputArr2values(ric.lc, pred)
 
             # working here on angle order
-            for dh in dict(
-                sorted(ric.dihedra.items(), key=lambda item: item[1].e_class)
-            ):
-                dho = ric.dihedra[dh]
-                print(
-                    dh, dho.e_class, cic.dihedraL14[dho.ndx], cic.dihedra_signs[dho.ndx]
-                )
-            print(dhLenArr)
-            print(dhChrArr)
-            for h in dict(sorted(ric.hedra.items(), key=lambda item: item[1].e_class)):
-                ho = ric.hedra[h]
-                print(
-                    h,
-                    ho.e_class,
-                    cic.hedraL12[ho.ndx],
-                    cic.hedraL23[ho.ndx],
-                    cic.hedraL13[ho.ndx],
-                )
-            print(hArr)
             dhndx = 0
+            dhs = sorted(ric.dihedra)  # AtomKey sort on tuples
+            ndxlst = []
+            if len(ric.rprev) != 0:
+                ndxlst = [ric.pick_angle("omg").ndx, ric.pick_angle("phi").ndx]
+            else:
+                dhndx = 2
+            ndxlst += [ric.dihedra[x].ndx for x in dhs if x[2] in ric]
+
+            """
+            # print(ndxlst)
+            print(cic.dihedraL14[ndxlst])
+            print(dhLenArr[dhndx:])
+            print(cic.dihedra_signs[ndxlst])
+            print(dhChrArr[dhndx:])
+            """
+            cic.dihedraL14[ndxlst] = dhLenArr[dhndx:]
+            cic.dihedra_signs[ndxlst] = dhChrArr[dhndx:]
+
+            hndx = 0
+            hs = sorted(ric.hedra)
             if len(ric.rprev) != 0:
                 rp = ric.rprev[0]
-                ndx = ric.pick_angle("omg").ndx
-                print(f"p-omg d14 {cic.dihedraL14[ndx]:.3f} <- {dhLenArr[dhndx]:.3f}")
-                print(
-                    f"p-omg chr {cic.dihedra_signs[ndx]:.3f} <- {dhChrArr[dhndx]:.3f}"
-                )
-                # cic.dihedraL14[ndx] = dhLenArr[dhndx]
-                # cic.dihedra_signs[ndx] = dhChrArr[dhndx]
-                dhndx += 1
-                ndx = ric.pick_angle("phi").ndx
-                print(f"p-phi d14 {cic.dihedraL14[ndx]:.3f} <- {dhLenArr[dhndx]:.3f}")
-                print(
-                    f"p-phi chr {cic.dihedra_signs[ndx]:.3f} <- {dhChrArr[dhndx]:.3f}"
-                )
-                # cic.dihedraL14[ndx] = dhLenArr[dhndx]
-                # cic.dihedra_signs[ndx] = dhChrArr[dhndx]
-                dhndx += 1
+                ndxlst = [
+                    rp.pick_angle("CA:C:1N").ndx,
+                    rp.pick_angle("C:1N:1CA").ndx,
+                    rp.pick_angle("1N:1CA:1C").ndx,
+                ]
             else:
-                dhndx += 2
-            """
-            for dl, dc in zip(dhLenArr, dhChrArr):
-                print("d14", cic.dihedraL14[dndx], dl)
-                cic.dihedraL14[dndx] = dl
-                print("dc", cic.dihedra_signs[dndx], dc)
-                cic.dihedra_signs[dndx] = dc
-                dndx += 1
-            for hl in hArr:
-                cic.hedraL12[hndx] = hl[0]
-                cic.hedraL23[hndx] = hl[1]
-                cic.hedraL13[hndx] = hl[2]
-                hndx += 1
-            """
-            # compute E for last conformation because convenient
+                ndxlst = []  # [ric.pick_angle("N:CA:C").ndx]
+                hndx = 2
+            ndxlst += [ric.hedra[x].ndx for x in hs if x[1] in ric]
 
+            """
+            # print(ndxlst)
+            print(cic.hedraL12[ndxlst])
+            print(hArr[hndx:, 0])
+            print(cic.hedraL23[ndxlst])
+            print(hArr[hndx:, 1])
+            print(cic.hedraL13[ndxlst])
+            print(hArr[hndx:, 2])
+            """
+
+            cic.hedraL12[ndxlst] = hArr[hndx:, 0]
+            cic.hedraL23[ndxlst] = hArr[hndx:, 1]
+            cic.hedraL13[ndxlst] = hArr[hndx:, 2]
+
+            # compute E for last conformation because convenient
             distArrR = xp.linalg.norm(
                 locArr[:, None, :] - self.grids[ric.lc][None, :, :], axis=-1
             )
-            # sortedX = xp.argpartition(distArrX, self.smArr)
             sortedR = xp.argpartition(distArrR, self.smArr)
 
-            # distribArrX += self.distributeGridPoints(
-            #    crArr, distArrX, self.maxd, sortedX
-            # )
             distribArrRC = self.gp.distributeGridPoints(
                 crArr, distArrR, self.maxd, sortedR
             )
