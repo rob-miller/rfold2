@@ -33,7 +33,7 @@ def find_efn_using_name(efn_name):
 
 
 def get_efn(config):
-    """Return initialized efn class from configuration (loaded from the json file).
+    """Return initialized efn class from configuration (loaded from the config file).
 
     Example:
         from efns import get_efn

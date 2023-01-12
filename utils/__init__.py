@@ -1,4 +1,4 @@
-import json
+import yaml
 
 # import math
 # import numpy as np
@@ -26,8 +26,8 @@ def parse_configuration(config_file):
     and returns the input if a dictionary was passed.
     """
     if isinstance(config_file, str):
-        with open(config_file) as json_file:
-            return json.load(json_file)
+        with open(config_file) as conf_file:
+            return yaml.load(conf_file)
     else:
         return config_file
 

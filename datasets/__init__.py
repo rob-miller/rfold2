@@ -33,7 +33,7 @@ def find_dataset_using_name(dataset_name):
 
 
 def get_dataset(config):
-    """Return initialized dataset class from configuration (loaded from the json file).
+    """Return initialized dataset class from configuration (loaded from the config file).
 
     Example:
         from datasets import get_dataset

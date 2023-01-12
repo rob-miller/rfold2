@@ -14,8 +14,6 @@ import torch.nn.functional as F
 from psycopg2.extras import DictCursor
 import copy
 
-# import json
-
 from .base_dataset import BaseDataset
 
 
@@ -54,7 +52,8 @@ class aa0Dataset(BaseDataset):
         self.gridDict = {
             # gp[0]: [gp[1], gp[2], gp[3]] + NoAtom for gp in self.cur.fetchall()
             # replace with normalized values because eagn is normalized by 'dbmng.py -gni'
-            gp[0]: [0.0, 0.0, 0.0] + NoAtom for gp in self.cur.fetchall()
+            gp[0]: [0.0, 0.0, 0.0] + NoAtom
+            for gp in self.cur.fetchall()
         }
 
         """

@@ -33,7 +33,7 @@ def find_mfn_using_name(mfn_name):
 
 
 def get_mfn(config):
-    """Return initialized mfn class from configuration (loaded from the json file).
+    """Return initialized mfn class from configuration (loaded from the config file).
 
     Example:
         from mfns import get_mfn

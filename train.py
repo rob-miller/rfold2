@@ -139,7 +139,7 @@ def train(config_file, export=True):
     optimizer = get_optimizer(model, config["optimizer"])
     writer = None
     if config["visualization"]["name"] == "tensorboard":
-        name = config_file[:-4] + "tb"  # replace '.json' with '.tb'
+        name = config_file[:-4] + "tb"  # replace '.json'/yaml with '.tb'
         writer = SummaryWriter(f'{config["visualization"]["path"]}/{name}')
 
     checkpoint_freq = config["checkpoint"]["epoch_freq"]
