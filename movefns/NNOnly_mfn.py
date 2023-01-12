@@ -15,7 +15,7 @@ from utils.rpdb import (
     MaxDihedron,
 )
 from Bio.PDB.Chain import Chain
-# from Bio.PDB.internal_coords import AtomKey
+from Bio.PDB.internal_coords import IC_Chain  # AtomKey
 
 from datasets import get_dataset
 from utils import parse_configuration
@@ -185,13 +185,16 @@ class NNOnlyMfn(BaseMfn):
 
     def move(self, chain):
         """Return next chain conformation"""
-        if not isinstance(chain, Chain):
-            for c in chain.get_chains():
-                break
-            chain = c
-        if not chain.internal_coord:
-            chain.atom_to_internal_coordinates()
-        cic = chain.internal_coord
+        if isinstance(chain, IC_Chain):
+            cic = chain
+        else:
+            if not isinstance(chain, Chain):
+                for c in chain.get_chains():
+                    break
+                chain = c
+            if not chain.internal_coord:
+                chain.atom_to_internal_coordinates()
+            cic = chain.internal_coord
         distPlot = cic.distance_plot()
         if not hasattr(cic, "dihedra_signs"):
             # create arrays to hold h13, d14, dsign
@@ -297,6 +300,7 @@ class NNOnlyMfn(BaseMfn):
             else:
                 ndxlst = []  # [ric.pick_angle("N:CA:C").ndx]
                 hndx = 2
+            pass
             ndxlst += [ric.hedra[x].ndx for x in hs if x[1] in ric]
 
             """
@@ -332,4 +336,5 @@ class NNOnlyMfn(BaseMfn):
 
         globAvg = xp.sum(resArr) / len(resArr)
         cic.distance_to_internal_coordinates()
-        return globAvg, resArr
+        cic.internal_to_atom_coordinates()
+        return globAvg, resArr, cic

@@ -194,8 +194,8 @@ if __name__ == "__main__":
     targGlobalE, targSeqE = environE.evaluate(pdb_structure)
     predGlobalE, predSeqE = environE.evaluate(pdb_structure2)
 
-    print(f"start: {targGlobalE} pred: {predGlobalE}")
-    for i in range(3):
-        globAvg, resArr = moveFn.move(pdb_structure)
-        print(f"targ : {targGlobalE} pred: {globAvg}")
+    # print(f"start: {targGlobalE} pred: {predGlobalE}")
+    for i in range(1000):
+        globAvg, resArr, pdb_structure2 = moveFn.move(pdb_structure2)
+        print(f"{i} targ : {targGlobalE} pred: {globAvg}")
     print("finished.")
