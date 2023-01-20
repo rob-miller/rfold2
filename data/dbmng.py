@@ -454,7 +454,7 @@ def getNorms():
 
     minLen14 = pqry1(cur0, "select min from len_normalization where name = 'len14'")
     rangeLen14 = pqry1(cur0, "select range from len_normalization where name = 'len14'")
-    avgLen14 = minLen14 / (rangeLen14 / 2)  <-- bug
+    avgLen14 = minLen14 / (rangeLen14 / 2)  <-- bug, compare below
 
     hMinLenArr = np.array(minLenList, dtype=np.float64)
     hRangeArr = np.array(rangeList, dtype=np.float64)
@@ -719,8 +719,6 @@ def genNNout(targList):
         print("genNNout() gnoLengths() pool closed.")
     else:
         gnoLengths(rkList)
-    print("early exit")
-    sys.exit(0)
 
     print(f"starting gnoCoords for {len(targList)} targets")
     if PROCESSES > 0:

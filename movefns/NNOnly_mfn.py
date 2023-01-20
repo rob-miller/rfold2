@@ -266,7 +266,9 @@ class NNOnlyMfn(BaseMfn):
                 pred = pred.numpy()
 
             # extract, denormalise, clean results
-            dhChrArr, dhLenArr, hArr = outputArr2values(ric.lc, pred)
+            dhChrArr, dhLenArr, hArr, dhLenArrNorm, hArrNorm = outputArr2values(
+                ric.lc, pred
+            )
 
             # working here on angle order
             dhndx = 0

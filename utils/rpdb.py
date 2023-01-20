@@ -277,9 +277,54 @@ def getNormValues():
         rslt = None
         pqry(cur, "select name, min, range from len_normalization")
         rslt = cur.fetchall()
-        normDict = {key: (v1, v2) for (key, v1, v2) in rslt}
+        normDict = {key: [v1, v2, 0] for (key, v1, v2) in rslt}
         conn.close()
+
+        # avgLen14, hAvgArr
+        # avg defined as min + 1/2 range
+        # so normalized avg is 0
+        for x in ["len12", "len23", "len13", "len14"]:
+            normDict[x][2] = normDict[x][0] + (normDict[x][1] / 2)
+
+        # hMinLenArr, hRangeArr
+        normDict["hMinLenArr"] = np.array(
+            [normDict[x][0] for x in ["len12", "len23", "len13"]], dtype=np.float64
+        )
+        normDict["hRangeArr"] = np.array(
+            [normDict[x][1] for x in ["len12", "len23", "len13"]], dtype=np.float64
+        )
+
     return normDict
+
+
+def dhlDenorm(dhLenArrNorm):
+    # denormalize from dbmng.py:gnoLengths() code:
+    normDict = getNormValues()
+
+    # "normalise dihedra len to -1/+1"
+    len14min, len14range = normDict["len14"]
+    dhLenArr = len14min + (((dhLenArrNorm + 1) / 2) * len14range)
+    return dhLenArr
+
+
+def harrDenorm(hArrNorm):
+    normDict = getNormValues()
+    # "normalise hedra len to -1/+1"
+    hArr = normDict["hMinLenArr"] + (((hArrNorm + 1) / 2) * normDict["hRangeArr"])
+    return hArr
+
+
+def dhlNorm(dhLenArr):
+    normDict = getNormValues()
+    # https://stats.stackexchange.com/questions/178626/how-to-normalize-data-between-1-and-1
+    dhLenArrNorm = (2 * ((dhLenArr - normDict["len14"][0]) / normDict["len14"][1])) - 1
+    return dhLenArrNorm
+
+
+def harrNorm(hArr):
+    normDict = getNormValues()
+    hArrNorm = (2 * ((hArr - normDict["hMinLenArr"]) / normDict["hRangeArr"])) - 1
+    return hArrNorm
 
 
 def outputArr2values(rc, outputArr):
@@ -300,29 +345,20 @@ def outputArr2values(rc, outputArr):
     if len(outputArr) != maxOutputLen:
         # per residue net
         ndx = 2 * rdhc
-        dhLenArr = outputArr[rdhc:ndx]
+        dhLenArrNorm = outputArr[rdhc:ndx]
         hArr = outputArr[ndx:].reshape(1, -1)
     else:
         # all residues net
         # split by MaxDihedron, then select rdhc, rhc regions
-        dhLenArr = outputArr[MaxDihedron : MaxDihedron + rdhc]
+        dhLenArrNorm = outputArr[MaxDihedron : MaxDihedron + rdhc]
         ndx = 2 * MaxDihedron
-        hArr = outputArr[ndx : ndx + (3 * rhc)]
-        hArr = hArr.reshape(-1, 3)
+        hArrNorm = outputArr[ndx : ndx + (3 * rhc)]
+        hArrNorm = hArrNorm.reshape(-1, 3)
 
-    # denormalize from dbmng.py:gnoLengths() code:
-    normDict = getNormValues()
+    dhLenArr = dhlDenorm(dhLenArrNorm)
+    hArr = harrDenorm(hArrNorm)
 
-    # "normalise dihedra len to -1/+1"
-    len14min, len14range = normDict["len14"]
-    dhLenArr = len14min + (((dhLenArr + 1) / 2) * len14range)
-
-    # "normalise hedra len to -1/+1"
-    hmin = [normDict[x][0] for x in ["len12", "len23", "len13"]]
-    hrange = [normDict[x][1] for x in ["len12", "len23", "len13"]]
-    hArr = hmin + (((hArr + 1) / 2) * hrange)
-
-    return dhChrArr, dhLenArr, hArr
+    return dhChrArr, dhLenArr, hArr, dhLenArrNorm, hArrNorm
 
 
 phiClassKey = None
