@@ -19,6 +19,7 @@ from utils.rpdb import MaxHedron, MaxDihedron, outputArr2values, len2ang
 from utils.rpdb import PDB_repository_base, getPDB, pdbidre, get_dcDict
 from utils.rpdb import resList, get_phi_omg_classes, lenAng2coords
 from utils.rpdb import crMapH, crMapNoH, NoAtomCR, get_dh_counts
+from utils.rpdb import getNormValues, dhlNorm, harrNorm
 
 
 from dbLoad import dbLoad
@@ -224,7 +225,7 @@ def parseArgs():
 
     args = arg_parser.parse_args()
 
-    if args.load or args.loadall or args.loadall2:
+    if args.load or args.loadall:
         args.dbl = args.gni = args.grid = args.gno = args.gnir = args.tst = True
         if args.loadall:
             args.norm = args.sd = args.gnlp = True
@@ -416,6 +417,7 @@ def genRkList(targList, resChar=None):
     return rkList
 
 
+"""
 minLenList = None
 rangeList = None
 minLen14 = None
@@ -452,17 +454,24 @@ def getNorms():
 
     minLen14 = pqry1(cur0, "select min from len_normalization where name = 'len14'")
     rangeLen14 = pqry1(cur0, "select range from len_normalization where name = 'len14'")
-    avgLen14 = minLen14 / (rangeLen14 / 2)
+    avgLen14 = minLen14 / (rangeLen14 / 2)  <-- bug
 
     hMinLenArr = np.array(minLenList, dtype=np.float64)
     hRangeArr = np.array(rangeList, dtype=np.float64)
     hAvgArr = hMinLenArr + (hRangeArr / 2)
+"""
 
 
 def gnoLengths(rklist):
     """populates dhlen table with normalized di/hedron interatom distances and chiralities"""
-    global minLenList, rangeList, minLen14, rangeLen14, hMinLenArr, hRangeArr
-    global avgLen14, hAvgArr
+    # global minLenList, rangeList, minLen14, rangeLen14, hMinLenArr, hRangeArr
+    # global avgLen14, hAvgArr
+
+    normDict = getNormValues()
+    hAvgArr = np.array(
+        [normDict[x][2] for x in ["len12", "len23", "len13"]], dtype=np.float64
+    )
+    avgLen14 = normDict["len14"][2]
 
     conn = openDb()
     cur = conn.cursor()
@@ -524,8 +533,7 @@ def gnoLengths(rklist):
         # print(dhChrArr)
 
         # normalise dihedra len to -1/+1 (chirality already on -1/+1)
-        # https://stats.stackexchange.com/questions/178626/how-to-normalize-data-between-1-and-1
-        dhLenArr = (2 * ((dhLenArr - minLen14) / rangeLen14)) - 1
+        dhLenArrNorm = dhlNorm(dhLenArr)
 
         # get hedra
         hlist = []
@@ -564,33 +572,48 @@ def gnoLengths(rklist):
         hArr = np.array(hlist, dtype=np.float64)
         # print(hArr)
         # normalise hedra len to -1/+1
-        hArr = (2 * ((hArr - hMinLenArr) / hRangeArr)) - 1
+        hArrNorm = harrNorm(hArr)
 
-        r = pqry1(cur, f"select 1 from dhlen where res_key = {rk}")
-        if r is None:
-            cur.execute(
-                "insert into dhlen(res_key, bytes) values (%s, %s)",
-                (rk, pickle.dumps(dhLenArr)),
-            )
+        if True:
+            r = pqry1(cur, f"select 1 from dhlen where res_key = {rk}")
+            if r is None:
+                cur.execute(
+                    "insert into dhlen(res_key, bytes) values (%s, %s)",
+                    (rk, pickle.dumps(dhLenArrNorm)),
+                )
 
-        r = pqry1(cur, f"select 1 from dhchirality where res_key = {rk}")
-        if r is None:
-            cur.execute(
-                "insert into dhchirality(res_key, bytes) values (%s, %s)",
-                (rk, pickle.dumps(dhChrArr)),
-            )
+            r = pqry1(cur, f"select 1 from dhchirality where res_key = {rk}")
+            if r is None:
+                cur.execute(
+                    "insert into dhchirality(res_key, bytes) values (%s, %s)",
+                    (rk, pickle.dumps(dhChrArr)),
+                )
 
-        r = pqry1(cur, f"select 1 from hlen where res_key = {rk}")
-        if r is None:
-            cur.execute(
-                "insert into hlen(res_key, bytes) values (%s, %s)",
-                (rk, pickle.dumps(hArr)),
-            )
+            r = pqry1(cur, f"select 1 from hlen where res_key = {rk}")
+            if r is None:
+                cur.execute(
+                    "insert into hlen(res_key, bytes) values (%s, %s)",
+                    (rk, pickle.dumps(hArrNorm)),
+                )
 
-        count += 1
-        if (count % 100000) == 0:
-            print("gnoLengths", count, "of", total)
-            conn.commit()
+            count += 1
+            if (count % 100000) == 0:
+                print("gnoLengths", count, "of", total)
+                conn.commit()
+        else:
+            # test codeode
+            dbdhl = pqry1p(cur, f"select bytes from dhlen where res_key = {rk}")
+            if dbdhl is not None and (dbdhl != dhLenArrNorm).any():
+                print(f"dhl fail: {rk} db: {dbdhl} != {dhLenArrNorm}")
+            dbchr = pqry1p(cur, f"select bytes from dhchirality where res_key = {rk}")
+            if dbchr is not None and (dbchr != dhChrArr).any():
+                print(f"chr fail: {rk} db: {dbchr} != {dhChrArr}")
+            dbha = pqry1p(cur, f"select bytes from hlen where res_key = {rk}")
+            if dbha is not None and (dbha != hArrNorm).any():
+                print(f"har fail: {rk} db: {dbha} != {hArrNorm}")
+            count += 1
+            if (count % 100000) == 0:
+                print("gnoLengths", count, "of", total)
 
     conn.commit()
     conn.close()
@@ -681,7 +704,7 @@ def gnoCoords(target):
 
 def genNNout(targList):
     global procResidues
-    getNorms()
+    # getNorms()
     get_dcDict(cur0)  # pre-load
     rkList = genRkList(targList)
 
@@ -696,6 +719,8 @@ def genNNout(targList):
         print("genNNout() gnoLengths() pool closed.")
     else:
         gnoLengths(rkList)
+    print("early exit")
+    sys.exit(0)
 
     print(f"starting gnoCoords for {len(targList)} targets")
     if PROCESSES > 0:
@@ -977,7 +1002,9 @@ def tstNNout(rklist, resChar=None):
 
         # end of aa0_dataset
 
-        dhChrArr, dhLenArr, hArr = outputArr2values(rc, outputArr)  # rc
+        dhChrArr, dhLenArr, hArr, dhLenArrNorm, hArrNorm = outputArr2values(
+            rc, outputArr
+        )  # rc
 
         """
         assert np.array_equal(dhLenArr1, dhLenArr)
