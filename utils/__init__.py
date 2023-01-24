@@ -27,7 +27,7 @@ def parse_configuration(config_file):
     """
     if isinstance(config_file, str):
         with open(config_file) as conf_file:
-            return yaml.load(conf_file)
+            return yaml.load(conf_file, Loader=yaml.FullLoader)
     else:
         return config_file
 
