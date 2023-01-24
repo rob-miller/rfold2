@@ -11,8 +11,6 @@ from utils.rpdb import (
     NoAtomCR,
     resMap,
     outputArr2values,
-    MaxHedron,
-    MaxDihedron,
 )
 from Bio.PDB.Chain import Chain
 from Bio.PDB.internal_coords import IC_Chain  # AtomKey
@@ -94,8 +92,6 @@ class NNOnlyMfn(BaseMfn):
 
         self.model = self.getNN(configuration)
         self.getResAngleMap()
-        self.getNormFactors()
-        # print("hello")
 
     def getNN(self, configDict):
         args = configDict["args"]
@@ -165,23 +161,6 @@ class NNOnlyMfn(BaseMfn):
                 " order by hc.h_class",
             )
             self.hedraMap[resChar] = [x[0] for x in self.cur.fetchall()]
-
-    def getNormFactors(self):
-        normFactors = {}
-        for leng in ("len12", "len23", "len13", "len14"):
-            pqry(
-                self.cur,
-                f"select min, range from len_normalization where name = '{leng}'",
-            )
-            normFactors[leng] = self.cur.fetchall()[0]
-
-        self.hMinLenArr = xp.array(
-            [normFactors[lx][0] for lx in ("len12", "len23", "len13")]
-        )
-        self.hRangeArr = xp.array(
-            [normFactors[lx][1] for lx in ("len12", "len23", "len13")]
-        )
-        (self.dhMinLen, self.dhRange) = normFactors["len14"]
 
     def move(self, chain):
         """Return next chain conformation"""

@@ -302,8 +302,8 @@ def dhlDenorm(dhLenArrNorm):
     normDict = getNormValues()
 
     # "normalise dihedra len to -1/+1"
-    len14min, len14range = normDict["len14"]
-    dhLenArr = len14min + (((dhLenArrNorm + 1) / 2) * len14range)
+    # dhLenArr = len14min + (((dhLenArrNorm + 1) / 2) * len14range)
+    dhLenArr = normDict["len14"][0] + (((dhLenArrNorm + 1) / 2) * normDict["len14"][1])
     return dhLenArr
 
 
