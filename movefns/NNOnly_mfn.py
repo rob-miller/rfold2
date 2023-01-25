@@ -11,6 +11,8 @@ from utils.rpdb import (
     NoAtomCR,
     resMap,
     outputArr2values,
+    dhlNorm,
+    getNormValues,
 )
 from Bio.PDB.Chain import Chain
 from Bio.PDB.internal_coords import IC_Chain  # AtomKey
@@ -181,15 +183,21 @@ class NNOnlyMfn(BaseMfn):
             dhSigns = (cic.dihedral_signs()).astype(int)
             cic.distplot_to_dh_arrays(distPlot, dhSigns)
 
+        # get dict of filtered, transformed env atoms
         coordDict = self.dbl.loadResidueEnvirons(cic, distPlot)
         if self.configuration["args"].fake:
+            # do here for db query so not repeated in loop
             chn = (cic.chain.full_id[0] + cic.chain.full_id[2]).upper()
+        normDict = getNormValues()
+        # resArr is energy at each residue position
         resArr = xp.zeros([len(cic.ordered_aa_ic_list)], dtype=float)
         rndx = 0
         for ric in cic.ordered_aa_ic_list:
+            # get env atom coords in AA space
             crArr, locArr0 = coordDict[ric]
             locArr = xp.array([la[0:3] for la in locArr0])
 
+            # assign env atoms to grid points and make local dict copy
             distArrX = xp.linalg.norm(
                 locArr[:, None, :] - self.grids["X"][None, :, :], axis=-1
             )
@@ -205,6 +213,7 @@ class NNOnlyMfn(BaseMfn):
                 [gp for gp in gridDictCopy.values()], dtype=torch.float32
             )
 
+            # normalise env atom coords on grid
             # normalise coords to -1/+1 - so all unpopulated grid points go to 0,0,0 atom type 0
             gridArr[:, 0:3] = (
                 2 * ((gridArr[:, 0:3] - self.gridMinArr) / (2 * self.step))
@@ -231,11 +240,8 @@ class NNOnlyMfn(BaseMfn):
                     " and c.chain_key = r.chain_key",
                 )
 
-                # try:
                 inp, pred = self.dataset.getRkInOut(rk, ric.lc)
                 inp = inp.numpy()
-                # except(TypeError):  # no data for terminal residues
-                #    pred = self.model(inputArr).cpu().detach().numpy()
                 inputArr = inputArr.numpy()
                 # for i in range(len(inp)):
                 #    print(f"{i} {inp[i]:.3f} {inputArr[i]:.3f}")
@@ -249,56 +255,128 @@ class NNOnlyMfn(BaseMfn):
                 ric.lc, pred
             )
 
-            # working here on angle order
+            # create index list mapping NN output array to chain interatom distance
+            # arrays e.g. dihedraL14, hedraL12.  Problems are AtomKey sort and
+            # prev residue if present holds some angles
+            # copy computed values from NN to chain interatom distance arrays
+
+            # dihedra dndxlst
             dhndx = 0
             dhs = sorted(ric.dihedra)  # AtomKey sort on tuples
-            ndxlst = []
+            dndxlst = []
             if len(ric.rprev) != 0:
-                ndxlst = [ric.pick_angle("omg").ndx, ric.pick_angle("phi").ndx]
+                dndxlst = [ric.pick_angle("omg").ndx, ric.pick_angle("phi").ndx]
             else:
                 dhndx = 2
-            ndxlst += [ric.dihedra[x].ndx for x in dhs if x[2] in ric]
+            dndxlst += [ric.dihedra[x].ndx for x in dhs if x[2] in ric]
 
             """
             # print(ndxlst)
-            print(cic.dihedraL14[ndxlst])
+            print(cic.dihedraL14[dndxlst])
             print(dhLenArr[dhndx:])
-            print(cic.dihedra_signs[ndxlst])
+            print(cic.dihedra_signs[dndxlst])
             print(dhChrArr[dhndx:])
             """
-            cic.dihedraL14[ndxlst] = dhLenArr[dhndx:]
-            cic.dihedra_signs[ndxlst] = dhChrArr[dhndx:]
 
+            # hedra hndxlst
             hndx = 0
             hs = sorted(ric.hedra)
             if len(ric.rprev) != 0:
                 rp = ric.rprev[0]
-                ndxlst = [
+                hndxlst = [
                     rp.pick_angle("CA:C:1N").ndx,
                     rp.pick_angle("C:1N:1CA").ndx,
                     rp.pick_angle("1N:1CA:1C").ndx,
                 ]
             else:
-                ndxlst = []  # [ric.pick_angle("N:CA:C").ndx]
+                hndxlst = []  # [ric.pick_angle("N:CA:C").ndx]
                 hndx = 2
             pass
-            ndxlst += [ric.hedra[x].ndx for x in hs if x[1] in ric]
+            hndxlst += [ric.hedra[x].ndx for x in hs if x[1] in ric]
 
             """
             # print(ndxlst)
-            print(cic.hedraL12[ndxlst])
+            print(cic.hedraL12[hndxlst])
             print(hArr[hndx:, 0])
-            print(cic.hedraL23[ndxlst])
+            print(cic.hedraL23[hndxlst])
             print(hArr[hndx:, 1])
-            print(cic.hedraL13[ndxlst])
+            print(cic.hedraL13[hndxlst])
             print(hArr[hndx:, 2])
             """
 
-            cic.hedraL12[ndxlst] = hArr[hndx:, 0]
-            cic.hedraL23[ndxlst] = hArr[hndx:, 1]
-            cic.hedraL13[ndxlst] = hArr[hndx:, 2]
+            if False:  # stepwise
+                # move toward predicted angles by stepfrac
+                stepfrac = 1.0  # move this fraction of difference to predicted
+                flipMin = (
+                    0.01  # abs val of normalized +/-1 dihedral must be greater to flip
+                )
+                # get current dihedrals this residue
+                rdhl14 = cic.dihedraL14[dndxlst]
+                # get target dihedrals this residue
+                tdhl14 = dhLenArr[dhndx:]
+                # get normalized current dihedrals this residue
+                nrdhl14 = dhlNorm(rdhl14)
+                # get current chiralities this residue
+                rdhchr = cic.dihedra_signs[dndxlst]
+                # get chiralities that need to flip
+                chrFlip = xp.not_equal(rdhchr, dhChrArr[dhndx:])
+                # get chiralities allowed to flip
+                flipOk = xp.greater_equal(xp.abs(nrdhl14), flipMin)
+                # flip those chiralities this residue
+                rdhchr[flipOk] *= -1
+                # set fliped chiralities at chain level, chiralities done
+                cic.dihedra_signs[dndxlst] = rdhchr
 
-            # compute E for last conformation because convenient
+                # get chiralities to flip but not allowed
+                flipWait = xp.logical_and(xp.logical_not(flipOk), chrFlip)
+                # blanket change all residue dhLen by fraction
+                deltal14 = (tdhl14 - rdhl14) * stepfrac
+                # marker for debugging
+                # deltal14[chrFlip] = 1
+                # flips already moving so no dhLen change there
+                deltal14[flipOk] = 0
+
+                # compute delta for flipWait cells
+                # distance between going through max
+                fwMaxTour = xp.full_like(deltal14, 0.0)
+                fwMaxTour[flipWait] = (normDict["maxLen14"] - tdhl14[flipWait]) + (
+                    normDict["maxLen14"] - rdhl14[flipWait]
+                )
+                # distance between going through min
+                fwMinTour = xp.full_like(deltal14, 0.0)
+                fwMinTour[flipWait] = (tdhl14[flipWait] - normDict["len14"][0]) + (
+                    rdhl14[flipWait] - normDict["len14"][0]
+                )
+                # choose best max tour or min tour
+                fwMax = xp.greater_equal(fwMaxTour, fwMinTour)
+                fwMax[~flipWait] = False
+                fwMin = xp.logical_not(fwMax)
+                fwMin[~flipWait] = False
+                deltal14[fwMax] = fwMaxTour[fwMax] * stepfrac
+                deltal14[fwMin] = -fwMinTour[fwMin] * stepfrac
+
+                cic.dihedraL14[dndxlst] += deltal14
+
+                rhl12 = cic.hedraL12[hndxlst]
+                rhl23 = cic.hedraL23[hndxlst]
+                rhl13 = cic.hedraL13[hndxlst]
+                deltahl12 = (hArr[hndx:, 0] - rhl12) * stepfrac
+                deltahl23 = (hArr[hndx:, 1] - rhl23) * stepfrac
+                deltahl13 = (hArr[hndx:, 2] - rhl13) * stepfrac
+
+                cic.hedraL12[hndxlst] += deltahl12
+                cic.hedraL23[hndxlst] += deltahl23
+                cic.hedraL13[hndxlst] += deltahl13
+            else:
+                cic.dihedraL14[dndxlst] = dhLenArr[dhndx:]
+                cic.dihedra_signs[dndxlst] = dhChrArr[dhndx:]
+                cic.hedraL12[hndxlst] = hArr[hndx:, 0]
+                cic.hedraL23[hndxlst] = hArr[hndx:, 1]
+                cic.hedraL13[hndxlst] = hArr[hndx:, 2]
+
+            # done updating chain interatom distance arrays for this residue
+
+            # compute E for last conformation (resArr) because convenient here
             distArrR = xp.linalg.norm(
                 locArr[:, None, :] - self.grids[ric.lc][None, :, :], axis=-1
             )
@@ -315,7 +393,14 @@ class NNOnlyMfn(BaseMfn):
             )
             rndx += 1
 
+        # done computing per residue env energy for input conformation, updated
+        # interatom distance arrays for chain
+
+        # compute global energy for input conformation by averaging per residue
+        # env energies
         globAvg = xp.sum(resArr) / len(resArr)
+
+        # compute coordinates for new conformation
         cic.distance_to_internal_coordinates()
         cic.internal_to_atom_coordinates()
         return globAvg, resArr, cic
