@@ -294,6 +294,9 @@ class dbLoad:
         akDict: dict = None,
         chain_key: int = None,
     ):
+        # Select env atoms for each residue based on distplot and not adjacent, not
+        # too close.  If akdict (db keys for each atomkey) is set, store in database,
+        # else log transformed env atoms to dict for energy function
 
         # global acr, acrp, nbds, nbdsAvg, sdPass
         dpSorted = np.argsort(distPlot)  # get indexes of each row so closest atom first
