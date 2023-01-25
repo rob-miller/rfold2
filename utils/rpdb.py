@@ -293,6 +293,8 @@ def getNormValues():
         normDict["hRangeArr"] = np.array(
             [normDict[x][1] for x in ["len12", "len23", "len13"]], dtype=np.float64
         )
+        # max len14, don't need for hedra; min + range
+        normDict["maxLen14"] = normDict["len14"][0] + normDict["len14"][1]
 
     return normDict
 
