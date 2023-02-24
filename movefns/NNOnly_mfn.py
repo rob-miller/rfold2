@@ -164,6 +164,75 @@ class NNOnlyMfn(BaseMfn):
             )
             self.hedraMap[resChar] = [x[0] for x in self.cur.fetchall()]
 
+    def stepwise(self, cic, dndxlst, hndxlst, hndx, tdhLenArr, tdhChrArr, thArr):
+        # move toward predicted angles by stepfrac
+        dstepfrac = self.configuration[
+            "dstepfrac"
+        ]  # move dihedra this fraction of difference to predicted
+        hstepfrac = self.configuration[
+            "hstepfrac"
+        ]  # move hedra this fraction of difference to predicted
+        flipMin = self.configuration[
+            "flipMin"
+        ]  # abs val of normalized +/-1 dihedral must be greater to flip
+
+        normDict = getNormValues()
+        # get current dihedrals this residue
+        rdhl14 = cic.dihedraL14[dndxlst]
+        # get target dihedrals this residue
+        tdhl14 = tdhLenArr
+        # get normalized current dihedrals this residue
+        nrdhl14 = dhlNorm(rdhl14)
+        # get current chiralities this residue
+        newChr = cic.dihedra_signs[dndxlst]
+        # get chiralities that need to flip
+        chrFlip = xp.not_equal(newChr, tdhChrArr)
+        # get chiralities allowed to flip
+        flipOk = xp.greater_equal(xp.abs(nrdhl14), flipMin)
+        flipOk = xp.logical_and(flipOk, chrFlip)
+        # flip those chiralities this residue
+        if dstepfrac > 0:  # allow for no change
+            newChr[flipOk] *= -1
+        # chiralities done
+
+        # get chiralities to flip but not allowed
+        flipWait = xp.logical_and(xp.logical_not(flipOk), chrFlip)
+        # blanket change all residue dhLen by fraction
+        deltal14 = (tdhl14 - rdhl14) * dstepfrac
+        # marker for debugging
+        # deltal14[chrFlip] = 1
+        # flips already moving so no dhLen change there
+        deltal14[flipOk] = 0
+
+        # compute delta for flipWait cells
+        # distance between going through max
+        fwMaxTour = xp.full_like(deltal14, 0.0)
+        fwMaxTour[flipWait] = (normDict["maxLen14"] - tdhl14[flipWait]) + (
+            normDict["maxLen14"] - rdhl14[flipWait]
+        )
+        # distance between going through min
+        fwMinTour = xp.full_like(deltal14, 0.0)
+        fwMinTour[flipWait] = (tdhl14[flipWait] - normDict["len14"][0]) + (
+            rdhl14[flipWait] - normDict["len14"][0]
+        )
+        # choose best max tour or min tour
+        fwMax = xp.greater_equal(fwMaxTour, fwMinTour)
+        fwMax[~flipWait] = False
+        fwMin = xp.logical_not(fwMax)
+        fwMin[~flipWait] = False
+        deltal14[fwMax] = fwMaxTour[fwMax] * dstepfrac
+        deltal14[fwMin] = -fwMinTour[fwMin] * dstepfrac
+
+        # now hedra
+        rhl12 = cic.hedraL12[hndxlst]
+        rhl23 = cic.hedraL23[hndxlst]
+        rhl13 = cic.hedraL13[hndxlst]
+        deltahl12 = (thArr[hndx:, 0] - rhl12) * hstepfrac
+        deltahl23 = (thArr[hndx:, 1] - rhl23) * hstepfrac
+        deltahl13 = (thArr[hndx:, 2] - rhl13) * hstepfrac
+
+        return (deltal14, newChr, deltahl12, deltahl23, deltahl13)
+
     def move(self, chain):
         """Return next chain conformation"""
         if isinstance(chain, IC_Chain):
@@ -188,7 +257,7 @@ class NNOnlyMfn(BaseMfn):
         if self.configuration["args"].fake:
             # do here for db query so not repeated in loop
             chn = (cic.chain.full_id[0] + cic.chain.full_id[2]).upper()
-        normDict = getNormValues()
+
         # resArr is energy at each residue position
         resArr = xp.zeros([len(cic.ordered_aa_ic_list)], dtype=float)
         rndx = 0
@@ -206,9 +275,11 @@ class NNOnlyMfn(BaseMfn):
             gridDictCopy = copy.deepcopy(self.gridDict)
 
             for i in range(len(crArr)):
-                gridDictCopy[assignedX[i]][0:3] = locArr[i]
-                gridDictCopy[assignedX[i]][3:] = self.crMap[self.acr[crArr[i]]]
-
+                try:
+                    gridDictCopy[assignedX[i]][0:3] = locArr[i]
+                    gridDictCopy[assignedX[i]][3:] = self.crMap[self.acr[crArr[i]]]
+                except KeyError:
+                    pass
             gridArr = torch.tensor(
                 [gp for gp in gridDictCopy.values()], dtype=torch.float32
             )
@@ -304,70 +375,24 @@ class NNOnlyMfn(BaseMfn):
             print(hArr[hndx:, 2])
             """
 
-            if False:  # stepwise
-                # move toward predicted angles by stepfrac
-                stepfrac = 1.0  # move this fraction of difference to predicted
-                flipMin = (
-                    0.01  # abs val of normalized +/-1 dihedral must be greater to flip
+            if self.configuration["stepwise"]:
+                (deltal14, newChr, deltahl12, deltahl23, deltahl13) = self.stepwise(
+                    cic,
+                    dndxlst,
+                    hndxlst,
+                    hndx,
+                    dhLenArr[dhndx:],
+                    dhChrArr[dhndx:],
+                    hArr,
                 )
-                # get current dihedrals this residue
-                rdhl14 = cic.dihedraL14[dndxlst]
-                # get target dihedrals this residue
-                tdhl14 = dhLenArr[dhndx:]
-                # get normalized current dihedrals this residue
-                nrdhl14 = dhlNorm(rdhl14)
-                # get current chiralities this residue
-                rdhchr = cic.dihedra_signs[dndxlst]
-                # get chiralities that need to flip
-                chrFlip = xp.not_equal(rdhchr, dhChrArr[dhndx:])
-                # get chiralities allowed to flip
-                flipOk = xp.greater_equal(xp.abs(nrdhl14), flipMin)
-                # flip those chiralities this residue
-                rdhchr[flipOk] *= -1
-                # set fliped chiralities at chain level, chiralities done
-                cic.dihedra_signs[dndxlst] = rdhchr
-
-                # get chiralities to flip but not allowed
-                flipWait = xp.logical_and(xp.logical_not(flipOk), chrFlip)
-                # blanket change all residue dhLen by fraction
-                deltal14 = (tdhl14 - rdhl14) * stepfrac
-                # marker for debugging
-                # deltal14[chrFlip] = 1
-                # flips already moving so no dhLen change there
-                deltal14[flipOk] = 0
-
-                # compute delta for flipWait cells
-                # distance between going through max
-                fwMaxTour = xp.full_like(deltal14, 0.0)
-                fwMaxTour[flipWait] = (normDict["maxLen14"] - tdhl14[flipWait]) + (
-                    normDict["maxLen14"] - rdhl14[flipWait]
-                )
-                # distance between going through min
-                fwMinTour = xp.full_like(deltal14, 0.0)
-                fwMinTour[flipWait] = (tdhl14[flipWait] - normDict["len14"][0]) + (
-                    rdhl14[flipWait] - normDict["len14"][0]
-                )
-                # choose best max tour or min tour
-                fwMax = xp.greater_equal(fwMaxTour, fwMinTour)
-                fwMax[~flipWait] = False
-                fwMin = xp.logical_not(fwMax)
-                fwMin[~flipWait] = False
-                deltal14[fwMax] = fwMaxTour[fwMax] * stepfrac
-                deltal14[fwMin] = -fwMinTour[fwMin] * stepfrac
 
                 cic.dihedraL14[dndxlst] += deltal14
-
-                rhl12 = cic.hedraL12[hndxlst]
-                rhl23 = cic.hedraL23[hndxlst]
-                rhl13 = cic.hedraL13[hndxlst]
-                deltahl12 = (hArr[hndx:, 0] - rhl12) * stepfrac
-                deltahl23 = (hArr[hndx:, 1] - rhl23) * stepfrac
-                deltahl13 = (hArr[hndx:, 2] - rhl13) * stepfrac
-
+                cic.dihedra_signs[dndxlst] = newChr
                 cic.hedraL12[hndxlst] += deltahl12
                 cic.hedraL23[hndxlst] += deltahl23
                 cic.hedraL13[hndxlst] += deltahl13
             else:
+
                 cic.dihedraL14[dndxlst] = dhLenArr[dhndx:]
                 cic.dihedra_signs[dndxlst] = dhChrArr[dhndx:]
                 cic.hedraL12[hndxlst] = hArr[hndx:, 0]
@@ -401,6 +426,8 @@ class NNOnlyMfn(BaseMfn):
         globAvg = xp.sum(resArr) / len(resArr)
 
         # compute coordinates for new conformation
+
         cic.distance_to_internal_coordinates()
         cic.internal_to_atom_coordinates()
+        cic.atom_to_internal_coordinates()
         return globAvg, resArr, cic
