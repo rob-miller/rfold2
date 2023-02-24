@@ -39,12 +39,34 @@ from Bio.PDB.ic_data import (
     ic_data_sidechains,
     residue_atom_bond_state,
 )
-from Bio.PDB.ic_rebuild import structure_rebuild_test
+from Bio.PDB.ic_rebuild import structure_rebuild_test, compare_residues
 from Bio.PDB.DSSP import DSSP
 from Bio.PDB.PDBExceptions import PDBException
 
 from Bio.PDB.PICIO import read_PIC_seq
 from Bio import SeqIO
+
+# dash stuff
+import threading
+
+import dash
+from dash import dcc, html
+from dash.dependencies import Output, Input
+import time
+import plotly.express as px
+import logging
+from flask import Flask
+
+# import pandas as pd
+import plotly.graph_objs as go
+
+server = Flask(__name__)
+# Set the logging level to exclude messages with severity level "POST"
+logging.getLogger("werkzeug").setLevel(logging.ERROR)
+app = dash.Dash(__name__, server=server)
+
+# pd.options.plotting.backend = "plotly"
+# end dash setup
 
 warnings.simplefilter("ignore", PDBConstructionWarning)
 
@@ -151,6 +173,36 @@ def parseArgs():
     #    sdPass = True
 
 
+def startDash():
+    global app
+    app.layout = html.Div(
+        [
+            html.H1("CA Distplot Monitor"),
+            html.Div(id="output"),
+            dcc.Graph(id="distplot"),
+            dcc.Graph(id="eplot"),
+            dcc.Interval(id="interval-component", interval=1000, n_intervals=0),
+        ]
+    )
+    app.run(host="0.0.0.0", port=8050, debug=False)
+
+
+distplot = None
+eplot = None
+
+
+@app.callback(
+    Output("distplot", "figure"),
+    Output("eplot", "figure"),
+    [Input("interval-component", "n_intervals")],
+)
+def update_output(n):
+    global distplot, eplot
+    fig = px.imshow(distplot)
+    fig2 = eplot  # px.imshow(eplot)
+    return fig, fig2
+
+
 if __name__ == "__main__":
     parseArgs()
     if not args.configFile:
@@ -158,6 +210,9 @@ if __name__ == "__main__":
         sys.exit(0)
 
     config = parse_configuration(args.configFile)
+
+    dash_thread = threading.Thread(target=startDash)
+    dash_thread.start()
 
     if args.protFile:
         config["target"]["protein"] = args.protFile
@@ -168,6 +223,37 @@ if __name__ == "__main__":
             f"unable to load {config['target']['protein']} as cif/pdb structure;use -h for help."
         )
         sys.exit(0)
+    else:
+        print(f"loaded {prot_id} chain {chainID} from {protFile}")
+
+    pdb_structure.atom_to_internal_coordinates()
+    """
+    # move struct to origin for coordinate comparisons
+    cic = pdb_structure.internal_coord
+    incacs = cic.initNCaCs
+    cic.atomArrayValid[cic.atomArrayIndex[incacs[0][0]]] = False
+    """
+    pdb_structure.internal_to_atom_coordinates()
+    # need if resetting struct to origin above:
+    # pdb_structure.atom_to_internal_coordinates()
+    # for debug below
+    # dp1 = pdb_structure.internal_coord.distance_plot()
+
+    if isinstance(pdb_structure, Chain):
+        chn = pdb_structure
+    else:
+        for chn in pdb_structure.get_chains():
+            break
+    cic = chn.internal_coord
+    atmNameNdx = AtomKey.fields.atm
+    atomArrayIndex = cic.atomArrayIndex
+    CaSelect = [
+        atomArrayIndex.get(k)
+        for k in atomArrayIndex.keys()
+        if k.akl[atmNameNdx] == "CA"
+    ]
+
+    distplot = dp1 = cic.distance_plot(CaSelect)
 
     for record in SeqIO.parse(
         gzip.open(protFile, mode="rt") if protFile.endswith(".gz") else protFile,
@@ -180,13 +266,36 @@ if __name__ == "__main__":
 
         pdb_structure2 = read_PIC_seq(record)
         pdb_structure2.internal_to_atom_coordinates()
+        pdb_structure2.atom_to_internal_coordinates()
         break  # only take first chain
 
-    # toProcess = args.file
-    # if config["nn"]["netconfig"]:
-    #    nn = getNN(config)
+    """
+    # debug
+    (pdb_structure2, prot_id2, chainID2, protFile2) = getPDB(
+        config["target"]["protein"]
+    )
+    pdb_structure2.atom_to_internal_coordinates()
+    pdb_structure2.internal_to_atom_coordinates()
+    # end debug
+    """
 
-    config["movefn"]["args"] = args  # so can pass cpu/cuda override
+    if isinstance(pdb_structure2, Chain):
+        chn = pdb_structure2
+    else:
+        for chn in pdb_structure2.get_chains():
+            break
+    cic = chn.internal_coord
+    atmNameNdx = AtomKey.fields.atm
+    atomArrayIndex = cic.atomArrayIndex
+    CaSelect = [
+        atomArrayIndex.get(k)
+        for k in atomArrayIndex.keys()
+        if k.akl[atmNameNdx] == "CA"
+    ]
+
+    dp2 = cic.distance_plot(CaSelect)
+
+    config["movefn"]["args"] = args  # so can pass cpu/cuda override, fake
     moveFn = get_mfn(config["movefn"])
 
     environE = get_efn(config["energyfn"])
@@ -194,8 +303,46 @@ if __name__ == "__main__":
     targGlobalE, targSeqE = environE.evaluate(pdb_structure)
     predGlobalE, predSeqE = environE.evaluate(pdb_structure2)
 
+    xvals = np.arange(len(targSeqE))
+    eplot = go.Figure()
+    eplot.add_trace(go.Scatter(x=xvals, y=targSeqE, mode="lines", name="targ"))
+    eplot.add_trace(go.Scatter(x=xvals, y=predSeqE, mode="lines", name="pred"))
+
     # print(f"start: {targGlobalE} pred: {predGlobalE}")
-    for i in range(1000):
-        globAvg, resArr, pdb_structure2 = moveFn.move(pdb_structure2)
+    for i in range(config["iterations"]):
+        (globAvg, resArr, pdb_structure2) = moveFn.move(pdb_structure2)
         print(f"{i} targ : {targGlobalE} pred: {globAvg}")
+
+        dp2 = cic.distance_plot(CaSelect)
+        distplot = np.triu(dp2) + np.tril(dp1, k=-1)
+
+        eplot = go.Figure()
+        eplot.add_trace(go.Scatter(x=xvals, y=targSeqE, mode="lines", name="targ"))
+        eplot.add_trace(go.Scatter(x=xvals, y=resArr, mode="lines", name="pred"))
+
+        """
+        dp2 = pdb_structure2.distance_plot()
+        dpdiff = np.abs(dp1 - dp2)
+        print(np.amax(dpdiff))
+        """
+        """
+        d = compare_residues(pdb_structure, pdb_structure2.chain, verbose=True)
+        print(d)
+        """
+        """
+        pdb_structure2 = pdb_structure2.chain
+        pdb_structure2.atom_to_internal_coordinates()
+        pdb_structure2.internal_to_atom_coordinates()
+        pdb_structure2 = pdb_structure2.internal_coord
+        """
+
+        """
+        (pdb_structure2, prot_id2, chainID2, protFile2) = getPDB(
+            config["target"]["protein"]
+        )
+        pdb_structure2.atom_to_internal_coordinates()
+        pdb_structure2.internal_to_atom_coordinates()
+        pdb_structure2 = pdb_structure2.internal_coord
+        """
+
     print("finished.")
