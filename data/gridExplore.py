@@ -272,7 +272,7 @@ class gridProt:
         will be closest, otherwise will be nearest without conflicting assignment
         for up to search_multi attempts"""
         closest = xp.argmin(distArr, axis=1)  # get minimum dist over each row
-        sorted = None  # might not need to sort so do later
+        sorted = None  # might not need to sort so do later # wiped input????
         count = self.search_multi  # number of tries to find no conflicts
         if not hasattr(self, "smArr"):
             self.smArr = [n for n in range(self.search_multi)]  # used by argpartition
@@ -536,7 +536,7 @@ class gridProt:
                 sortedX = sortedR = None  # might not need so delay
 
             # closestX = xp.argmin(distArrX, axis=1)
-            assignedX = self.assignGridPoints(distArrX, sortedX)
+            assignedX = self.assignGridPoints(distArrX, sortedX)  # sorted arg ignored???
             # closestR = xp.argmin(distArrR, axis=1)
             assignedR = self.assignGridPoints(distArrR, sortedR)
             if self.updateDbGlobal:
