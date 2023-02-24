@@ -10,5 +10,10 @@ movefn:
   grid_resolution: "3.0"
   hydrogens: false
   res_char: X
-  cpu: true
-foldopts: {}
+  cpu: false
+  stepwise: true  # move slowly to next value, else jump
+  dstepfrac: 0.0005  # move dihedra len this fraction of difference to predicted
+  flipMin: 0.9  # abs val of normalized +/-1 dihedral len must be greater to flip
+  hstepfrac: 0.1  # move hedra this fraction of difference to predicted
+iterations: 10000
+
