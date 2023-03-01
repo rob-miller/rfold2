@@ -345,7 +345,7 @@ class rpdbT:
             dhLenArrNorm = outputArr[self.MaxDihedron : self.MaxDihedron + rdhc]
             ndx = 2 * self.MaxDihedron
             hArrNorm = outputArr[ndx : ndx + (3 * rhc)]
-            hArrNorm = hArr.reshape(-1, 3)
+            hArrNorm = hArrNorm.reshape(-1, 3)
 
         dhLenArr = self.dhlDenorm(dhLenArrNorm)
         hArr = self.harrDenorm(hArrNorm)
