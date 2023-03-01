@@ -48,6 +48,7 @@ from Bio import SeqIO
 
 # dash stuff
 import threading
+import socket
 
 import dash
 from dash import dcc, html
@@ -85,7 +86,9 @@ PROCESSES = 7
 
 
 def sigint_handler(signal, frame):
+    global dash_thread
     print("KeyboardInterrupt is caught")
+    dash_thread.stop()
     # global conn
     # conn.close()
     sys.exit(0)
@@ -173,37 +176,112 @@ def parseArgs():
     #    sdPass = True
 
 
+# dash code
+
+distplot = None
+seqEplot = None
+globEplot = None
+target = None
+iter = 0
+maxit = None
+config = None
+dash_thread = None
+
+
+def is_port_in_use(port):
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        return s.connect_ex(("localhost", port)) == 0
+
+
+def getDashPort():
+    tport = 8050
+    while is_port_in_use(tport):
+        tport += 1
+    return tport
+
+
 def startDash():
-    global app
+    global app, config
     app.layout = html.Div(
         [
             html.H1("CA Distplot Monitor"),
-            html.Div(id="output"),
+            # html.Div(id="output"),
+            html.H2(id="mystring"),
             dcc.Graph(id="distplot"),
-            dcc.Graph(id="eplot"),
+            dcc.Graph(id="seqEplot"),
+            dcc.Graph(id="globEplot"),
+            html.H3("Configuration:"),
+            dcc.Markdown(id="configData", dangerously_allow_html=True),
             dcc.Interval(id="interval-component", interval=1000, n_intervals=0),
         ]
     )
-    app.run(host="0.0.0.0", port=8050, debug=False)
-
-
-distplot = None
-eplot = None
+    dport = getDashPort()
+    print(f"Dash interface starting on port {dport}")
+    app.run(host="0.0.0.0", port=dport, debug=False)
 
 
 @app.callback(
-    Output("distplot", "figure"),
-    Output("eplot", "figure"),
+    [
+        Output("distplot", "figure"),
+        Output("seqEplot", "figure"),
+        Output("globEplot", "figure"),
+        # . Output("mystring", "children"),
+    ],
     [Input("interval-component", "n_intervals")],
 )
 def update_output(n):
-    global distplot, eplot
-    fig = px.imshow(distplot)
-    fig2 = eplot  # px.imshow(eplot)
-    return fig, fig2
+    global distplot, seqEplot, globEplot
+    fig = px.imshow(distplot) if distplot is not None else None
+    fig2 = seqEplot  # px.imshow(seqEplot)
+    fig3 = globEplot
+    return fig, fig2, fig3  # , f"target: {target}"
+
+
+@app.callback(
+    Output("mystring", "children"),
+    [Input("interval-component", "n_intervals")],
+)
+def update_target(n):
+    global target, iter, maxit
+    targStr = f"target: {target}  iteration {iter}/{maxit}"
+    return targStr
+
+
+@app.callback(
+    Output("configData", "children"),
+    [Input("interval-component", "n_intervals")],
+)
+def update_config(n):
+    global config
+
+    configStr = "<table>\n<tbody>\n"
+    for tkey in config.keys():
+        if isinstance(config[tkey], dict):
+            configStr += f"<tr><td>{tkey}</td></tr>\n<tr><td>\n<table>\n<tbody>\n"
+            for k, v in config[tkey].items():
+                configStr += f"<tr><td> </td><td>{k}</td><td>{v}</td></tr>\n"
+            configStr += "</tbody></table></td></tr>\n"
+        else:
+            configStr += (
+                f"<tr><td>{tkey}</td><tr><td> </td><td>{config[tkey]}</td></tr></tr>\n"
+            )
+    configStr += "</tbody></table>\n"
+    return configStr
+
+
+# end dash code
+
+
+def make_extended(cic):
+    for d in cic.dihedra.values():
+        if d.e_class == "NCACN":  # psi
+            d.angle = 123
+        elif d.e_class == "CNCAC":  # phi
+            d.angle = -104
 
 
 if __name__ == "__main__":
+    # read instructions
     parseArgs()
     if not args.configFile:
         print("no files to process. use '-h' for help")
@@ -211,12 +289,10 @@ if __name__ == "__main__":
 
     config = parse_configuration(args.configFile)
 
-    dash_thread = threading.Thread(target=startDash)
-    dash_thread.start()
-
     if args.protFile:
         config["target"]["protein"] = args.protFile
 
+    # load target structure
     (pdb_structure, prot_id, chainID, protFile) = getPDB(config["target"]["protein"])
     if not pdb_structure:
         print(
@@ -225,6 +301,10 @@ if __name__ == "__main__":
         sys.exit(0)
     else:
         print(f"loaded {prot_id} chain {chainID} from {protFile}")
+    target = prot_id
+    maxit = config["iterations"]
+    dash_thread = threading.Thread(target=startDash)
+    dash_thread.start()
 
     pdb_structure.atom_to_internal_coordinates()
     """
@@ -233,6 +313,7 @@ if __name__ == "__main__":
     incacs = cic.initNCaCs
     cic.atomArrayValid[cic.atomArrayIndex[incacs[0][0]]] = False
     """
+
     pdb_structure.internal_to_atom_coordinates()
     # need if resetting struct to origin above:
     # pdb_structure.atom_to_internal_coordinates()
@@ -245,6 +326,7 @@ if __name__ == "__main__":
         for chn in pdb_structure.get_chains():
             break
     cic = chn.internal_coord
+
     atmNameNdx = AtomKey.fields.atm
     atomArrayIndex = cic.atomArrayIndex
     CaSelect = [
@@ -254,20 +336,47 @@ if __name__ == "__main__":
     ]
 
     distplot = dp1 = cic.distance_plot(CaSelect)
+    pdb_structure.internal_to_atom_coordinates()
+    # all done target structure
 
-    for record in SeqIO.parse(
-        gzip.open(protFile, mode="rt") if protFile.endswith(".gz") else protFile,
-        "cif-atom",  # assume cif file, otherwise need pdb-atom
-    ):
-        print(f">{record.id}")
-        out = [(record.seq[i : i + 80]) for i in range(0, len(record.seq), 80)]
-        for lin in out:
-            print(lin)
-
-        pdb_structure2 = read_PIC_seq(record)
-        pdb_structure2.internal_to_atom_coordinates()
+    # load or generate predicted structure
+    if config["target"]["copy_struct"]:
+        (pdb_structure2, prot_id2, chainID2, protFile2) = getPDB(
+            config["target"]["protein"]
+        )
         pdb_structure2.atom_to_internal_coordinates()
-        break  # only take first chain
+        pdb_structure2.internal_to_atom_coordinates()
+
+        if isinstance(pdb_structure2, Chain):
+            chn = pdb_structure2
+        else:
+            for chn in pdb_structure2.get_chains():
+                break
+        cic = chn.internal_coord
+
+    else:
+        for record in SeqIO.parse(
+            gzip.open(protFile, mode="rt") if protFile.endswith(".gz") else protFile,
+            "cif-atom",  # assume cif file, otherwise need pdb-atom
+        ):
+            print(f">{record.id}")
+            out = [(record.seq[i : i + 80]) for i in range(0, len(record.seq), 80)]
+            for lin in out:
+                print(lin)
+
+            pdb_structure2 = read_PIC_seq(record)
+            pdb_structure2.internal_to_atom_coordinates()
+
+            if isinstance(pdb_structure2, Chain):
+                chn = pdb_structure2
+            else:
+                for chn in pdb_structure2.get_chains():
+                    break
+            cic = chn.internal_coord
+            make_extended(cic)
+
+            pdb_structure2.atom_to_internal_coordinates()
+            break  # only take first chain
 
     """
     # debug
@@ -279,12 +388,6 @@ if __name__ == "__main__":
     # end debug
     """
 
-    if isinstance(pdb_structure2, Chain):
-        chn = pdb_structure2
-    else:
-        for chn in pdb_structure2.get_chains():
-            break
-    cic = chn.internal_coord
     atmNameNdx = AtomKey.fields.atm
     atomArrayIndex = cic.atomArrayIndex
     CaSelect = [
@@ -303,22 +406,51 @@ if __name__ == "__main__":
     targGlobalE, targSeqE = environE.evaluate(pdb_structure)
     predGlobalE, predSeqE = environE.evaluate(pdb_structure2)
 
-    xvals = np.arange(len(targSeqE))
-    eplot = go.Figure()
-    eplot.add_trace(go.Scatter(x=xvals, y=targSeqE, mode="lines", name="targ"))
-    eplot.add_trace(go.Scatter(x=xvals, y=predSeqE, mode="lines", name="pred"))
+    seqEplotXvals = np.arange(len(targSeqE))
+    seqEplot = go.Figure()
+    seqEplot.add_trace(
+        go.Scatter(x=seqEplotXvals, y=targSeqE, mode="lines", name="targ")
+    )
+    seqEplot.add_trace(
+        go.Scatter(x=seqEplotXvals, y=predSeqE, mode="lines", name="pred")
+    )
+
+    globEplotXvals = np.arange(maxit)
+    globEplotTarg = np.full((maxit), targGlobalE)
+    globEplotPred = np.full((maxit), targGlobalE)
+    globEplotPred[0] = predGlobalE
+    globEplot = go.Figure()
+    globEplot.add_trace(
+        go.Scatter(x=globEplotXvals, y=globEplotTarg, mode="lines", name="targ")
+    )
+    globEplot.add_trace(
+        go.Scatter(x=globEplotXvals, y=globEplotPred, mode="lines", name="pred")
+    )
 
     # print(f"start: {targGlobalE} pred: {predGlobalE}")
-    for i in range(config["iterations"]):
+    for iter in range(maxit):
         (globAvg, resArr, pdb_structure2) = moveFn.move(pdb_structure2)
-        print(f"{i} targ : {targGlobalE} pred: {globAvg}")
+        print(f"{iter} targ : {targGlobalE} pred: {globAvg}")
 
         dp2 = cic.distance_plot(CaSelect)
         distplot = np.triu(dp2) + np.tril(dp1, k=-1)
 
-        eplot = go.Figure()
-        eplot.add_trace(go.Scatter(x=xvals, y=targSeqE, mode="lines", name="targ"))
-        eplot.add_trace(go.Scatter(x=xvals, y=resArr, mode="lines", name="pred"))
+        seqEplot = go.Figure()
+        seqEplot.add_trace(
+            go.Scatter(x=seqEplotXvals, y=targSeqE, mode="lines", name="targ")
+        )
+        seqEplot.add_trace(
+            go.Scatter(x=seqEplotXvals, y=resArr, mode="lines", name="pred")
+        )
+
+        globEplotPred[iter] = globAvg
+        globEplot = go.Figure()
+        globEplot.add_trace(
+            go.Scatter(x=globEplotXvals, y=globEplotTarg, mode="lines", name="targ")
+        )
+        globEplot.add_trace(
+            go.Scatter(x=globEplotXvals, y=globEplotPred, mode="lines", name="pred")
+        )
 
         """
         dp2 = pdb_structure2.distance_plot()
