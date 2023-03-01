@@ -269,9 +269,56 @@ class rpdbT:
             rslt = None
             pqry(cur, "select name, min, range from len_normalization")
             rslt = cur.fetchall()
-            self.normDict = {key: (v1, v2) for (key, v1, v2) in rslt}
+            self.normDict = {key: (v1, v2, 0) for (key, v1, v2) in rslt}
             conn.close()
+            for x in ["len12", "len23", "len13", "len14"]:
+                self.normDict[x][2] = self.normDict[x][0] + (self.normDict[x][1] / 2)
+
+            # hMinLenArr, hRangeArr
+            # avg defined as min + 1/2 range
+            # so normalized avg is 0
+            self.normDict["hMinLenArr"] = torch.tensor(
+                [self.normDict[x][0] for x in ["len12", "len23", "len13"]],
+                dtype=torch.float,
+                device=torch.device(self.device),
+                requires_grad=True,
+            )
+            self.normDict["hRangeArr"] = torch.tensor(
+                [self.normDict[x][1] for x in ["len12", "len23", "len13"]],
+                dtype=torch.float,
+                device=torch.device(self.device),
+                requires_grad=True,
+            )
+            # max len14, don't need for hedra; min + range
+            self.normDict["maxLen14"] = self.normDict["len14"][0] + self.normDict["len14"][1]
+
         return self.normDict
+
+    def dhlDenorm(self, dhLenArrNorm):
+        # denormalize from dbmng.py:gnoLengths() code:
+        normDict = self.getNormValues()
+
+        # "normalise dihedra len to -1/+1"
+        # dhLenArr = len14min + (((dhLenArrNorm + 1) / 2) * len14range)
+        dhLenArr = normDict["len14"][0] + (((dhLenArrNorm + 1) / 2) * normDict["len14"][1])
+        return dhLenArr
+
+    def harrDenorm(self, hArrNorm):
+        normDict = self.getNormValues()
+        # "normalise hedra len to -1/+1"
+        hArr = normDict["hMinLenArr"] + (((hArrNorm + 1) / 2) * normDict["hRangeArr"])
+        return hArr
+
+    def dhlNorm(self, dhLenArr):
+        normDict = self.getNormValues()
+        # https://stats.stackexchange.com/questions/178626/how-to-normalize-data-between-1-and-1
+        dhLenArrNorm = (2 * ((dhLenArr - normDict["len14"][0]) / normDict["len14"][1])) - 1
+        return dhLenArrNorm
+
+    def harrNorm(self, hArr):
+        normDict = self.getNormValues()
+        hArrNorm = (2 * ((hArr - normDict["hMinLenArr"]) / normDict["hRangeArr"])) - 1
+        return hArrNorm
 
     def outputArr2values(self, rc, outputArr):
         """Split output array into dhChirality, dhLen, hLen arrays"""
@@ -290,37 +337,20 @@ class rpdbT:
         if len(outputArr) != maxOutputLen:
             # per residue net
             ndx = 2 * rdhc
-            dhLenArr = outputArr[rdhc:ndx]
+            dhLenArrNorm = outputArr[rdhc:ndx]
             hArr = outputArr[ndx:].reshape(1, -1)
         else:
             # all residues net
             # split by MaxDihedron, then select rdhc, rhc regions
-            dhLenArr = outputArr[self.MaxDihedron : self.MaxDihedron + rdhc]
+            dhLenArrNorm = outputArr[self.MaxDihedron : self.MaxDihedron + rdhc]
             ndx = 2 * self.MaxDihedron
-            hArr = outputArr[ndx : ndx + (3 * rhc)]
-            hArr = hArr.reshape(-1, 3)
+            hArrNorm = outputArr[ndx : ndx + (3 * rhc)]
+            hArrNorm = hArr.reshape(-1, 3)
 
-        # denormalize from dbmng.py:gnoLengths() code
-        normDict = self.getNormValues()
+        dhLenArr = self.dhlDenorm(dhLenArrNorm)
+        hArr = self.harrDenorm(hArrNorm)
 
-        # "normalise dihedra len to -1/+1"
-        len14min, len14range = normDict["len14"]
-        dhLenArr = len14min + (((dhLenArr + 1) / 2) * len14range)
-
-        # "normalise hedra len to -1/+1"
-        hmin = torch.tensor(
-            [normDict[x][0] for x in ["len12", "len23", "len13"]],
-            device=torch.device(self.device),
-            requires_grad=True,
-        )
-        hrange = torch.tensor(
-            [normDict[x][1] for x in ["len12", "len23", "len13"]],
-            device=torch.device(self.device),
-            requires_grad=True,
-        )
-        hArr = hmin + (((hArr + 1) / 2) * hrange)
-
-        return dhChrArr, dhLenArr, hArr
+        return dhChrArr, dhLenArr, hArr, dhLenArrNorm, hArrNorm
 
     phiClassKey = None
     omgClassKey = None
