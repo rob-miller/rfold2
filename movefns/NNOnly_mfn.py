@@ -102,8 +102,13 @@ class NNOnlyMfn(BaseMfn):
 
         if "cudalist" in configDict:
             config["model"]["devlist"] = f"cuda:{configDict['cudalist']}"
+            # config["model"]["devlist"] = []
+            # for dev in configDict['cudalist']:
+            #    config["model"]["devlist"].append(f"cuda:{dev}")
         if args.cudalist:
-            config["model"]["devlist"] = f"cuda:{args.cudalist}"
+            config["model"]["devlist"] = []
+            for dev in args.cudalist:
+                config["model"]["devlist"].append(f"cuda:{dev}")
         if ("cpu" in configDict and configDict["cpu"]) or args.cpu:
             for i in range(len(config["model"]["devlist"])):
                 config["model"]["devlist"][i] = "cpu"
