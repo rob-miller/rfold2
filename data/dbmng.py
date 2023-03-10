@@ -230,8 +230,8 @@ def parseArgs():
         if args.loadall:
             args.norm = args.sd = args.gnlp = True
 
-    if args.dbl and not (args.filelist or args.source_list):
-        print("need -f or -sln for db load")
+    if args.dbl and not (args.filelist or args.source_list or args.file != []):
+        print("need -f or -sln or file for db load")
         sys.exit()
 
     if args.PROCESSES is not None:
@@ -248,6 +248,9 @@ def parseArgs():
 
 def delPDB(pdbid):
     pdbk = pqry1(cur0, f"select pdb_key from pdb where pdb_id = '{pdbid[:4]}'")
+    if pdbk is None:
+        print(f"PDBid {pdbid[:4]} not found in database to delete.")
+        return
     print(f"deleting PDB id {pdbid[:4]} key {pdbk}")
     start = time()
 
@@ -521,7 +524,7 @@ def gnoLengths(rklist):
         for dh in cur.fetchall():
             dhdict[Edron.gen_tuple(dh[0])] = dh[1:]
 
-        for k in sorted(dhdict):
+        for k in sorted(dhdict):  # AtomKey sort
             dhlist += dhdict[k]
             # print(k, dhdict[k])
 
@@ -565,7 +568,7 @@ def gnoLengths(rklist):
         for h in cur.fetchall():
             hdict[Edron.gen_tuple(h[0])] = h[1:]
 
-        for k in sorted(hdict):
+        for k in sorted(hdict):  # AtomKey sort
             hlist += [hdict[k]]
             # print(k, hdict[k])
 
@@ -644,7 +647,7 @@ def gnoCoords(target):
             else:
                 # omg = phi = ric.pick_angle("psi")
                 dlst = []
-            for k in sorted(ric.dihedra):
+            for k in sorted(ric.dihedra):  # AtomKey sort
                 d = ric.dihedra[k]
                 # filter next omg, phi and alt cb path
                 if d.e_class not in ["CNCAC", "CACNCA", "CNCACB"]:
@@ -674,7 +677,11 @@ def gnoCoords(target):
             cur,
             f"select rebuild, chain_key from chain where chain_name = '{chain_name}'",
         )
-        rslt = cur.fetchall()[0]
+        rslt = cur.fetchall()  # [0]
+        if rslt == []:
+            print(f"pdb {prot_id} chain {chainID} not found, please run -dbl")
+            sys.exit()
+        rslt = rslt[0]
         rebuild, chain_key = rslt[0], rslt[1]
 
         if rebuild:
@@ -708,6 +715,9 @@ def genNNout(targList):
     get_dcDict(cur0)  # pre-load
     rkList = genRkList(targList)
 
+    if len(rkList) == 0:
+        print(f"no residues found for {targList} - perhaps add chainID?")
+        sys.exit()
     print(f"starting gnoLengths for {len(rkList)} residues")
     if PROCESSES > 0:
         lol = splitList(rkList, PROCESSES)
@@ -1140,6 +1150,7 @@ def tstNNout(rklist, resChar=None):
             #
             # print(dbdAtoms)
             # print()
+            # sys.exit()
 
         if problems > 0:
             print(f"chain {chainName} {rc} res key {rk} has {problems} problems")
