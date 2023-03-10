@@ -3,13 +3,14 @@
 import os
 import re
 import gzip
+import sys
 
 from Bio.PDB import ic_data
 from Bio.PDB.PDBParser import PDBParser
 from Bio.PDB.MMCIFParser import MMCIFParser
 
 from Bio.PDB.vectors import multi_rot_Z
-from Bio.PDB.internal_coords import Edron
+from Bio.PDB.internal_coords import Edron, IC_Residue, IC_Chain
 
 # from Bio.PDB.vectors import multi_coord_space, coord_space
 
@@ -18,6 +19,11 @@ from .rdb import openDb, pqry1, pqry
 import numpy as np
 
 PDB_repository_base = None
+
+# only mainchain atoms, no hydrogens or deuterium
+IC_Residue.accept_atoms = IC_Residue.accept_mainchain
+IC_Residue.no_altloc = True
+IC_Chain.MaxPeptideBond = 1.5
 
 pdbDirs = [
     "/Users/rob/data/pdb/",
@@ -339,6 +345,7 @@ def outputArr2values(rc, outputArr):
 
     maxOutputLen = (3 * MaxHedron) + (2 * MaxDihedron)
 
+    np.clip(outputArr, -1, 1)
     # force dhChrArr to +/-1
     dhChrArr = outputArr[0:rdhc]
     dhChrArr[dhChrArr < 0] = -1
@@ -610,6 +617,9 @@ def len2ang(rc, dhChrArr, dhLenArr, hArr):
 
 
 def lenAng2coords(rc, hedraAngleRads, hArr, dihedraAngleRads):
+    if np.any(dihedraAngleRads < -6.28318) or np.any(dihedraAngleRads > 6.28318):
+        print("lenAng2coords dihedral input not radians")
+        sys.exit()
     hedraMap = getHedraMap()
     if rc == "X":
         rc = "W"
@@ -626,6 +636,8 @@ def lenAng2coords(rc, hedraAngleRads, hArr, dihedraAngleRads):
     hAtoms[:, :, 3] = 1.0  # homogeneous
     hAtomsR: np.ndarray = np.copy(hAtoms)
 
+    #
+    # (editor align)
     # hedra inital coords
 
     # sar = supplementary angle radian: angles which add to 180
@@ -668,16 +680,26 @@ def lenAng2coords(rc, hedraAngleRads, hArr, dihedraAngleRads):
     dihedraCount = len(dihedraAngleRads)
     a4_pre_rotation = np.empty((dihedraCount, 4))
 
+    #
+    #  (editor align)
     # only 4th atom takes work:
     # pick 4th atom based on rev flag
     a4_pre_rotation[dRev] = hAtoms[dH2ndx, 0][dRev]
     a4_pre_rotation[dFwd] = hAtomsR[dH2ndx, 2][dFwd]
 
+    """
+    if dbg:
+    editor align
+    editor align
+    """
     # numpy multiply, add operations below intermediate array but out=
     # not working with masking:
     a4_pre_rotation[:, 2] = np.multiply(a4_pre_rotation[:, 2], -1)  # a4 to +Z
 
+    # editor align
+
     a4shift = np.empty(dihedraCount)
+
     a4shift[dRev] = hedraL23[dH2ndx][dRev]  # len23
     a4shift[dFwd] = hedraL12[dH2ndx][dFwd]  # len12
 
@@ -686,10 +708,21 @@ def lenAng2coords(rc, hedraAngleRads, hArr, dihedraAngleRads):
         a4shift,
     )  # so a2 at origin
     """
-    if dbg:
         print("dihedraCount", dihedraCount)
         print("a4shift", a4shift[0:10])
         print("a4_pre_rotation", a4_pre_rotation[0:10])
+
+    editor align
+    editor align
+    editor align
+    editor align
+    editor align
+    editor align
+    editor align
+    editor align
+    editor align
+    editor align
+    editor align
     """
     # now build dihedra initial coords
 
@@ -698,13 +731,17 @@ def lenAng2coords(rc, hedraAngleRads, hArr, dihedraAngleRads):
 
     dAtoms = np.empty((dihedraCount, 4, 4), dtype=np.float64)
 
+    # editor align
+
     dAtoms[:, :3][dFwd] = dH1atoms[dFwd]
     dAtoms[:, :3][dRev] = dH1atomsR[:, 2::-1][dRev]
 
     """
+    dbg = True
     if dbg:
         print("dH1atoms", dH1atoms[0:10])
-        print("dH1atosR", dH1atomsR[0:10])
+        print("dH1atomsR", dH1atomsR[0:10])
+        print("dH1atomsR[dRev]", dH1atomsR[dRev])
         print("dAtoms", dAtoms[0:10])
     """
 
