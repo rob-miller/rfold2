@@ -7,12 +7,18 @@ import gzip
 from Bio.PDB import ic_data
 from Bio.PDB.PDBParser import PDBParser
 from Bio.PDB.MMCIFParser import MMCIFParser
-from Bio.PDB.internal_coords import Edron
+from Bio.PDB.internal_coords import Edron, IC_Residue, IC_Chain
 
 from .rdb import openDb, pqry1, pqry
 
 # import numpy as np
 import torch
+
+
+# only mainchain atoms, no hydrogens or deuterium
+IC_Residue.accept_atoms = IC_Residue.accept_mainchain
+IC_Residue.no_altloc = True
+IC_Chain.MaxPeptideBond = 1.5
 
 
 class rpdbT:
@@ -269,7 +275,7 @@ class rpdbT:
             rslt = None
             pqry(cur, "select name, min, range from len_normalization")
             rslt = cur.fetchall()
-            self.normDict = {key: (v1, v2, 0) for (key, v1, v2) in rslt}
+            self.normDict = {key: [v1, v2, 0] for (key, v1, v2) in rslt}
             conn.close()
             for x in ["len12", "len23", "len13", "len14"]:
                 self.normDict[x][2] = self.normDict[x][0] + (self.normDict[x][1] / 2)
@@ -290,7 +296,9 @@ class rpdbT:
                 requires_grad=True,
             )
             # max len14, don't need for hedra; min + range
-            self.normDict["maxLen14"] = self.normDict["len14"][0] + self.normDict["len14"][1]
+            self.normDict["maxLen14"] = (
+                self.normDict["len14"][0] + self.normDict["len14"][1]
+            )
 
         return self.normDict
 
@@ -300,7 +308,9 @@ class rpdbT:
 
         # "normalise dihedra len to -1/+1"
         # dhLenArr = len14min + (((dhLenArrNorm + 1) / 2) * len14range)
-        dhLenArr = normDict["len14"][0] + (((dhLenArrNorm + 1) / 2) * normDict["len14"][1])
+        dhLenArr = normDict["len14"][0] + (
+            ((dhLenArrNorm + 1) / 2) * normDict["len14"][1]
+        )
         return dhLenArr
 
     def harrDenorm(self, hArrNorm):
@@ -312,7 +322,9 @@ class rpdbT:
     def dhlNorm(self, dhLenArr):
         normDict = self.getNormValues()
         # https://stats.stackexchange.com/questions/178626/how-to-normalize-data-between-1-and-1
-        dhLenArrNorm = (2 * ((dhLenArr - normDict["len14"][0]) / normDict["len14"][1])) - 1
+        dhLenArrNorm = (
+            2 * ((dhLenArr - normDict["len14"][0]) / normDict["len14"][1])
+        ) - 1
         return dhLenArrNorm
 
     def harrNorm(self, hArr):
@@ -328,12 +340,12 @@ class rpdbT:
         rhc, rdhc = hedra_counts[rc], dihedra_counts[rc]
 
         maxOutputLen = (3 * self.MaxHedron) + (2 * self.MaxDihedron)
-
+        torch.clamp(outputArr, min=-1, max=1)
         # force dhChrArr to +/-1
         dhChrArr = outputArr[0:rdhc].clone().detach()
         dhChrArr[dhChrArr < 0] = -1.0
         dhChrArr[dhChrArr >= 0] = 1.0
-        
+
         if len(outputArr) != maxOutputLen:
             # per residue net
             ndx = 2 * rdhc
@@ -642,7 +654,9 @@ class rpdbT:
         hedraMap = self.getHedraMap()
         if rc == "X":
             rc = "W"
-        dRev = (hedraMap[rc][2]).long()
+        dRev = torch.as_tensor(
+            hedraMap[rc][2], dtype=torch.bool, device=torch.device(self.device)
+        )
         dFwd = torch.logical_not(dRev)
         dH1ndx = hedraMap[rc][0]
         dH2ndx = hedraMap[rc][1]
@@ -711,26 +725,26 @@ class rpdbT:
             npa4pr = a4_pre_rotation.cpu().detach().numpy()
             nph0 = (hAtoms[dH2ndx, 0][dRev]).cpu().detach().numpy()
             nph1 = (hAtomsR[dH2ndx, 2][dFwd]).cpu().detach().numpy()
+        """
+        # numpy multiply, add operations below intermediate array but out=
+        # not working with masking:
+        a4_pre_rotation[:, 2] = torch.multiply(a4_pre_rotation[:, 2], -1)  # a4 to +Z
 
-            # numpy multiply, add operations below intermediate array but out=
-            # not working with masking:
-            a4_pre_rotation[:, 2] = torch.multiply(a4_pre_rotation[:, 2], -1)  # a4 to +Z
+        # npa4pr2 = a4_pre_rotation.cpu().detach().numpy()
 
-            npa4pr2 = a4_pre_rotation.cpu().detach().numpy()
+        a4shift = torch.empty(
+            dihedraCount, device=torch.device(self.device), dtype=torch.float
+        )
+        a4shift[dRev] = hedraL23[dH2ndx][dRev]  # len23
+        a4shift[dFwd] = hedraL12[dH2ndx][dFwd]  # len12
 
-            a4shift = torch.empty(
-                dihedraCount, device=torch.device(self.device), dtype=torch.float
-            )
-            a4shift[dRev] = hedraL23[dH2ndx][dRev]  # len23
-            a4shift[dFwd] = hedraL12[dH2ndx][dFwd]  # len12
+        # npa4s = a4shift.cpu().detach().numpy()
 
-            npa4s = a4shift.cpu().detach().numpy()
-
-            a4_pre_rotation[:, 2] = torch.add(
-                a4_pre_rotation[:, 2],
-                a4shift,
-            )  # so a2 at origin
-
+        a4_pre_rotation[:, 2] = torch.add(
+            a4_pre_rotation[:, 2],
+            a4shift,
+        )  # so a2 at origin
+        """
             npa4pr3 = a4_pre_rotation.cpu().detach().numpy()
 
             print("dihedraCount", dihedraCount)
@@ -747,15 +761,19 @@ class rpdbT:
         )
 
         dAtoms[:, :3][dFwd] = dH1atoms[dFwd]
-        # dAtoms[:, :3][dRev] = dH1atomsR[:, 2::-1][dRev]
+        # dH1atomsRF = torch.flip(dH1atomsR[:, :3], dims=[1])  # torch.flip(dH1atomsR, [1])
         dH1atomsRF = torch.flip(dH1atomsR, [1])
         dAtoms[:, :3][dRev] = dH1atomsRF[dRev]
 
         """
+        # dbg = True
         if dbg:
-            print("dH1atoms", dH1atoms[0:10])
-            print("dH1atosR", dH1atomsR[0:10])
-            print("dAtoms", dAtoms[0:10])
+            #print("dH1atoms", dH1atoms[0:10])
+            #print("dH1atomsR", dH1atomsR[0:10])
+            print("dH1atomsRF", dH1atomsRF)
+            print("dRev", dRev[0:10])
+            print("dH1atomsRF[dRev]", dH1atomsRF[dRev])
+            print("dAtoms", dAtoms)
         """
 
         # build rz rotation matrix for dihedral angle
