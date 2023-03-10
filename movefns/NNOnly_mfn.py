@@ -341,7 +341,11 @@ class NNOnlyMfn(BaseMfn):
             dhs = sorted(ric.dihedra)  # AtomKey sort on tuples
             dndxlst = []
             if len(ric.rprev) != 0:
-                dndxlst = [ric.pick_angle("omg").ndx, ric.pick_angle("phi").ndx]
+                # omg, phi only exist if rprev exists, get up front
+                dndxlst = [
+                    ric.pick_angle("omg").ndx,
+                    ric.pick_angle("phi").ndx,
+                ]
             else:
                 dhndx = 2
             dndxlst += [ric.dihedra[x].ndx for x in dhs if x[2] in ric]
@@ -356,7 +360,7 @@ class NNOnlyMfn(BaseMfn):
 
             # hedra hndxlst
             hndx = 0
-            hs = sorted(ric.hedra)
+            hs = sorted(ric.hedra)  # AtomKey sort on tuples
             if len(ric.rprev) != 0:
                 rp = ric.rprev[0]
                 hndxlst = [
