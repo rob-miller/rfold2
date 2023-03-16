@@ -340,11 +340,11 @@ class rpdbT:
         rhc, rdhc = hedra_counts[rc], dihedra_counts[rc]
 
         maxOutputLen = (3 * self.MaxHedron) + (2 * self.MaxDihedron)
-        torch.clamp(outputArr, min=-1, max=1)
+        # done in rmsd_loss.py torch.clamp(outputArr, min=-1, max=1)
         # force dhChrArr to +/-1
         dhChrArr = outputArr[0:rdhc].clone().detach()
-        dhChrArr[dhChrArr < 0] = -1.0
-        dhChrArr[dhChrArr >= 0] = 1.0
+        # dhChrArr[dhChrArr < 0] = -1.0
+        # dhChrArr[dhChrArr >= 0] = 1.0
 
         if len(outputArr) != maxOutputLen:
             # per residue net
