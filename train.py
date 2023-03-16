@@ -3,12 +3,16 @@
 import argparse
 import os
 import time
+import math
+import sys
 
 from utils import parse_configuration
 from datasets import get_dataset
 from models import get_model, checkpoint_name, checkpoint_save, checkpoint_load
 from losses import get_loss
 from optimizers import get_optimizer
+
+import numpy as np
 
 import torch
 from torch.utils.data import random_split, DataLoader
@@ -66,7 +70,26 @@ def train_epoch(dataloader, model, loss_fn, optimizer, writer, epcb, config):
         inp, outp = getInputOutput(config, inp, outp)
         # Compute prediction error
         pred = model(inp)
+        if torch.isnan(pred).any():
+            print("pred is nan :-(")
+            sys.exit()
+        """
+        if torch.isnan(pred).any():
+            print('skip')
+            # continue
+        n_inp = inp.cpu().detach().numpy()
+        n_outp = outp.cpu().detach().numpy()
+        n_pred = pred.cpu().detach().numpy()
+        if n_inp == n_outp:
+            print("foo")
+        if np.isnan(n_pred).any():
+            print("bar")
+        """
         loss = loss_fn(pred, outp)
+
+        if torch.any(loss.isnan()):
+            print("loss is nan :-(")
+            sys.exit()
 
         # Backpropagation
         optimizer.zero_grad()
@@ -76,12 +99,13 @@ def train_epoch(dataloader, model, loss_fn, optimizer, writer, epcb, config):
         if batch % config["report"]["batch_freq"] == 0 or os.path.exists(
             config["process"]["batchStop"]
         ):
-            loss, current = loss.item(), batch * len(inp)
+            lossv, current = loss.item(), batch * len(inp)
             # if writer is None or config["visualization"]["name"] == "text":
-            print(f"loss: {loss:>7f}  [{current:>5d}/{size:>5d}]")
+
+            print(f"loss: {lossv:>7f}  [{current:>5d}/{size:>5d}]")
             # el
             if config["visualization"]["name"] == "tensorboard":
-                writer.add_scalar("loss/train", loss, epcb + batch)
+                writer.add_scalar("loss/train", lossv, epcb + batch)
 
         if os.path.exists(config["process"]["batchStop"]):
             print(f"stopping: found {config['process']['batchStop']}")
