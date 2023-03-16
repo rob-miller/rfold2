@@ -46,10 +46,11 @@ def checkpoint_name(epoch, config):
     gridRes = config["dataset"]["grid_resolution"]
     loss = config["loss"]["name"]
     optim = config["optimizer"]["name"]
+    layers = config["model"]["layers"]
     path = config["checkpoint"]["path"]
     if epoch == "last":
         # https://stackoverflow.com/questions/2225564/get-a-filtered-list-of-files-in-a-directory
-        pat = f"{mname}_{reschar}_{gridRes}_{loss}_{optim}_net_*.pt*"
+        pat = f"{mname}_{reschar}_{gridRes}_{loss}_{optim}_{layers}_net_*.pt*"
         pat_path = os.path.join(path, pat)
         file_list = glob.glob(pat_path)
         # https://stackoverflow.com/questions/43074685/find-file-in-directory-with-the-highest-number-in-the-filename
