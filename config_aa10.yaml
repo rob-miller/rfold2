@@ -17,9 +17,10 @@ loader:
   num_workers: 0
   pin_memory: true
 model:
-  name: env2ang10
+  name: resnet2layer
   devlist:
     - cuda:2
+  layers: 7
 loss:
   name: MSE
 optimizer:
