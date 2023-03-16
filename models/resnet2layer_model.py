@@ -33,13 +33,13 @@ class rnLinRelu(nn.Module):
         return self.layer(x)
 
 
-class env2ang10Model(nn.Module):
+class resnet2layerModel(nn.Module):
     def __init__(self, config):
         """Initialize the model."""
         super().__init__()
         self.config = config
         idim, odim = config["input_dim"], config["output_dim"]
-        lst = [rnLinRelu(idim, idim) for i in range(7)]
+        lst = [rnLinRelu(idim, idim) for i in range(config["layers"])]
         self.netlist = nn.ModuleList(
             [
                 nn.Sequential(*lst, nn.Linear(idim, odim)),

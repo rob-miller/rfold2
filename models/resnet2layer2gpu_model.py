@@ -33,14 +33,14 @@ class rnLinRelu(nn.Module):
         return self.layer(x)
 
 
-class env2ang11Model(nn.Module):
+class resnet2layer2gpuModel(nn.Module):
     def __init__(self, config):
         """Initialize the model."""
         super().__init__()
         self.config = config
         idim, odim = config["input_dim"], config["output_dim"]
-        lst = [rnLinRelu(idim, idim) for i in range(7)]
-        lst2 = [rnLinRelu(idim, idim) for i in range(7)]
+        lst = [rnLinRelu(idim, idim) for i in range(config["layers"])]
+        lst2 = [rnLinRelu(idim, idim) for i in range(config["layers"])]
         self.netlist = nn.ModuleList(
             [
                 nn.Sequential(*lst),
