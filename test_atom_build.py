@@ -1,4 +1,4 @@
-#!/usr/local/bin/python3
+#!/usr/local/bin/python3 -u
 
 import argparse
 import sys
@@ -17,7 +17,7 @@ from utils.rdb import openDb, pqry, pqry1, pqry1p  # pgetset
 from utils.rpdbT import rpdbT
 
 
-dftlTarg = "5D8VA"  # "7RSAA"
+dftlTarg = "2V9LA"  # "7RSAA"
 
 lrtol = 0.1
 latol = 0.1
@@ -66,6 +66,8 @@ def parseArgs():
     )
 
     args = arg_parser.parse_args()
+    if args.limit_count is not None:
+        args.limit_count = int(args.limit_count)
 
 
 def getResAngleMap(cur):
@@ -134,6 +136,23 @@ def pmt(a, b):
     print("required rtol, atol = ", min_tol_for_allclose(a, b))
 
 
+# @profile
+def getData(outp, rpdbt):
+    # cuda rpdbT
+    coutp = outp.to(device)
+    ctargLens = rpdbt.outputArr2values(rc, coutp)
+    ctargAngs = rpdbt.len2ang(rc, ctargLens[0], ctargLens[1], ctargLens[2])
+    ctargAtoms = rpdbt.lenAng2coords(rc, ctargAngs[1], ctargLens[2], ctargAngs[3])
+
+    # numpy rpdb
+    noutp = outp.detach().cpu().numpy()
+    ntargLens = outputArr2values(rc, noutp)
+    ntargAngs = len2ang(rc, ntargLens[0], ntargLens[1], ntargLens[2])
+    ntargAtoms = lenAng2coords(rc, ntargAngs[1], ntargLens[2], ntargAngs[3])
+
+    return ctargLens, ctargAngs, ctargAtoms, ntargLens, ntargAngs, ntargAtoms
+
+
 if __name__ == "__main__":
     # read instructions
     parseArgs()
@@ -163,7 +182,8 @@ if __name__ == "__main__":
     if targList == []:
         targList.append(dftlTarg)
 
-    fileNo = 1
+    fileNo = 0
+    resCount = 0
     for targ in targList:
         if args.skip_count and fileNo <= args.skip_count:
             fileNo += 1
@@ -181,7 +201,8 @@ if __name__ == "__main__":
             )
             continue  # sys.exit(0)
         else:
-            print(f"loaded {prot_id} chain {chainID} from {protFile}")
+            fileNo += 1
+            print(f"{fileNo} loaded {prot_id} chain {chainID} from {protFile}")
 
         pdb_structure.atom_to_internal_coordinates()
         pdb_structure.internal_to_atom_coordinates()
@@ -216,10 +237,14 @@ if __name__ == "__main__":
             dndxlst = []
             if len(ric.rprev) != 0:
                 # omg, phi only exist if rprev exists, get up front
-                dndxlst = [
-                    ric.pick_angle("omg").ndx,
-                    ric.pick_angle("phi").ndx,
-                ]
+                try:
+                    dndxlst = [
+                        ric.pick_angle("omg").ndx,
+                        ric.pick_angle("phi").ndx,
+                    ]
+                except AttributeError:
+                    print(f"fail getting rprev for {chain_name} {rsp}")
+                    continue
             else:
                 dhndx = 2
             dndxlst += [ric.dihedra[x].ndx for x in dhs if x[2] in ric]
@@ -241,11 +266,18 @@ if __name__ == "__main__":
                 cur, f"select bytes from dhcoords where res_key = {rkey}"
             )
 
+            if dbdhcoords is None:
+                print(f"no data for {chain_name} {rsp}")
+                continue
             dbdhcdict = {
                 dhec: dbdhcoords[ndx] for dhec, ndx in zip(dhsec, range(len(dhsec)))
             }
 
             dbdhlens = pqry1p(cur, f"select bytes from dhlen where res_key = {rkey}")
+
+            if dbdhlens is None:
+                print(f"no length data for {chain_name} {rsp}")
+                continue
 
             dbdhldict = {
                 dhec: dbdhlens[ndx] for dhec, ndx in zip(dhsec, range(len(dhsec)))
@@ -268,13 +300,14 @@ if __name__ == "__main__":
             # now get NN output
             inp, outp = nn_dataset.getRkInOut(rkey, rc)
 
-            # cuda rpdbT
-            coutp = outp.to(device)
-            ctargLens = rpdbt.outputArr2values(rc, coutp)
-            ctargAngs = rpdbt.len2ang(rc, ctargLens[0], ctargLens[1], ctargLens[2])
-            ctargAtoms = rpdbt.lenAng2coords(
-                rc, ctargAngs[1], ctargLens[2], ctargAngs[3]
-            )
+            (
+                ctargLens,
+                ctargAngs,
+                ctargAtoms,
+                ntargLens,
+                ntargAngs,
+                ntargAtoms,
+            ) = getData(outp, rpdbt)
 
             ctargLens = tuple(x.detach().cpu().numpy() for x in ctargLens)
             ctargAngs = tuple(x.detach().cpu().numpy() for x in ctargAngs)
@@ -287,12 +320,6 @@ if __name__ == "__main__":
 
             # for a in ctargAtoms[:3]:
             #    print()
-
-            # numpy rpdb
-            noutp = outp.detach().cpu().numpy()
-            ntargLens = outputArr2values(rc, noutp)
-            ntargAngs = len2ang(rc, ntargLens[0], ntargLens[1], ntargLens[2])
-            ntargAtoms = lenAng2coords(rc, ntargAngs[1], ntargLens[2], ntargAngs[3])
 
             nttadict = {
                 dhec: ntargAtoms[ndx + dhndx]
@@ -404,3 +431,6 @@ if __name__ == "__main__":
 
             if not allpass:
                 print("===========================")
+            resCount += 1
+
+    print(f"finished {fileNo} targets ({resCount} residues) of {len(targList)}.")
